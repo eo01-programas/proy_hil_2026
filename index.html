@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCP Viewer 2026 - Gestión Total (Modular)</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="p-4 h-screen flex flex-col overflow-auto text-slate-800">
+    <div class="flex justify-between items-end mb-3 shrink-0">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Proyección 2026</h1>
+            <p class="text-xs text-slate-500 font-medium">Gestión Integrada: Detalle + Materiales + Control</p>
+        </div>
+        
+        <div class="flex gap-3 items-center bg-white p-2 rounded-lg shadow-sm border border-slate-200">
+            <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" onchange="processFile()" class="block w-60 text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold cursor-pointer hover:file:bg-blue-100"/>
+            <button onclick="exportToExcel()" id="btnExport" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded text-xs shadow transition-colors">EXCEL</button>
+            <div id="appVersion" class="text-xs text-slate-400 ml-4">v?</div>
+        </div>
+    </div>
+
+    <div id="debugInfo" class="text-xs text-slate-600 font-medium mt-2 hidden max-h-48 overflow-auto"></div>
+    
+    <div class="flex border-b border-gray-300 mb-0 hidden gap-1" id="tabContainer">
+        <button onclick="switchTab('detailView', this)" class="tab-btn tab-active">DETALLE GRUPOS</button>
+        <button onclick="switchTab('summaryView', this)" class="tab-btn tab-inactive">RESUMEN GERENCIAL</button>
+        <button onclick="switchTab('crudosView', this)" class="tab-btn tab-inactive text-emerald-800">MAT. CRUDOS</button>
+        <button onclick="switchTab('mezclasView', this)" class="tab-btn tab-inactive text-orange-800">MAT. MEZCLAS</button>
+        <button onclick="switchTab('balanceView', this)" class="tab-btn tab-inactive text-purple-800">RESUMEN:</button>
+    </div>
+    
+    <!-- Vistas (módulos) -->
+    <div id="detailView" class="table-wrapper hidden rounded-tl-none border-t-0">
+        <table id="groupsTable" class="min-w-full border-collapse w-full">
+            <thead id="groupsHead"></thead>
+            <tbody id="groupsBody" class="bg-white text-gray-700"></tbody>
+            <tfoot id="groupsFooter"></tfoot>
+        </table>
+    </div>
+    
+    <div id="summaryView" class="hidden table-wrapper rounded-tl-none border-t-0 bg-white">
+        <div class="p-6 space-y-8">
+            <div>
+                <h3 class="text-sm font-bold text-slate-700 mb-2 border-l-4 border-blue-600 pl-2">RESUMEN POR CLIENTE (KG)</h3>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table id="summaryClientTable" class="min-w-full text-xs"></table>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-sm font-bold text-slate-700 mb-2 border-l-4 border-indigo-600 pl-2">RESUMEN POR LÍNEA (KG)</h3>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table id="summaryLineTable" class="min-w-full text-xs"></table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="crudosView" class="table-wrapper hidden rounded-tl-none border-t-0">
+        <table id="crudosTable" class="min-w-full border-collapse w-full">
+            <thead id="crudosHead"></thead>
+            <tbody id="crudosBody" class="bg-white text-gray-700"></tbody>
+            <tfoot id="crudosFooter"></tfoot>
+        </table>
+    </div>
+    
+    <div id="mezclasView" class="table-wrapper hidden rounded-tl-none border-t-0">
+        <table id="mezclasTable" class="min-w-full border-collapse w-full">
+            <thead id="mezclasHead"></thead>
+            <tbody id="mezclasBody" class="bg-white text-gray-700"></tbody>
+            <tfoot id="mezclasFooter"></tfoot>
+        </table>
+    </div>
+
+    <div id="balanceView" class="hidden table-wrapper rounded-tl-none border-t-0 bg-white">
+        <div class="p-4 space-y-4">
+            <div class="overflow-x-auto border border-gray-200 rounded-lg bg-white">
+                <table id="balanceTable" class="min-w-full text-xs"></table>
+            </div>
+
+            <div class="overflow-x-auto border border-gray-200 rounded-lg bg-white relative">
+                <div class="p-2 bg-white flex justify-between items-center">
+                    <strong class="text-sm">ALGODÓN (QQ) - SUMA TOTAL</strong>
+                </div>
+                <table id="algodonTable" class="min-w-full text-xs"></table>
+                <div class="p-2">
+                    <button class="add-row-btn" onclick="addManualRow('algodonTable', true)">+ Agregar Fila Algodón</button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto border border-gray-200 rounded-lg bg-white relative">
+                <div class="p-2 bg-white flex justify-between items-center">
+                    <strong class="text-sm">OTRAS FIBRAS (KG REQ) - SUMA TOTAL</strong>
+                </div>
+                <table id="otrasTable" class="min-w-full text-xs"></table>
+                <div class="p-2">
+                    <button class="add-row-btn" onclick="addManualRow('otrasTable', false)">+ Agregar Fila Otras Fibras</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modales (se mantienen en index para simplificar integración) -->
+    <div id="moveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold text-slate-800 mb-6">Reclasificar Hilado</h2>
+            <div id="modalItemInfo" class="bg-slate-50 p-3 rounded mb-6 border border-slate-200">
+                <p class="text-xs text-slate-600"><strong>Línea:</strong> <span id="modalLine">-</span></p>
+                <p class="text-xs text-slate-600"><strong>Cliente:</strong> <span id="modalClient">-</span></p>
+                <p class="text-xs text-slate-600 font-semibold"><strong>Hilado:</strong> <span id="modalYarn">-</span></p>
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Seleccionar Módulo:</label>
+                <select id="modalModuleSelect" class="w-full p-2 border border-slate-300 rounded" onchange="onModalModuleChange(this.value)">
+                    <option value="">-- Elegir Módulo --</option>
+                    <option value="CRUDO">MAT. CRUDOS</option>
+                    <option value="MEZCLA">MAT. MEZCLAS</option>
+                </select>
+            </div>
+            <div id="modalGroupContainer" class="hidden mb-6">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Seleccionar Bloque:</label>
+                <select id="modalGroupSelect" class="w-full p-2 border border-slate-300 rounded">
+                    <option value="">-- Elegir Bloque --</option>
+                </select>
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded font-semibold hover:bg-slate-300">Cancelar</button>
+                <button onclick="applyModalMove()" class="px-4 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fiberDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-4xl w-full mx-4 max-h-96 overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-slate-800" id="fiberModalTitle">Detalle de Fibra</h2>
+                <button onclick="closeFiberModal()" class="text-gray-600 hover:text-gray-900 text-2xl">&times;</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table id="fiberDetailTable" class="min-w-full text-xs border-collapse">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="border px-3 py-2 text-left">CLIENTE</th>
+                            <th class="border px-3 py-2 text-right">ENE</th>
+                            <th class="border px-3 py-2 text-right">FEB</th>
+                            <th class="border px-3 py-2 text-right">MAR</th>
+                            <th class="border px-3 py-2 text-right">ABR</th>
+                            <th class="border px-3 py-2 text-right">MAY</th>
+                            <th class="border px-3 py-2 text-right">JUN</th>
+                            <th class="border px-3 py-2 text-right">JUL</th>
+                            <th class="border px-3 py-2 text-right">AGO</th>
+                            <th class="border px-3 py-2 text-right">SEP</th>
+                            <th class="border px-3 py-2 text-right">OCT</th>
+                            <th class="border px-3 py-2 text-right">NOV</th>
+                            <th class="border px-3 py-2 text-right">DIC</th>
+                            <th class="border px-3 py-2 text-right font-bold">TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fiberDetailBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="discrepancyModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[9999]">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-3xl w-full mx-4 max-h-96 overflow-y-auto">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b-2 border-red-300">
+                <h2 class="text-2xl font-bold text-red-600">⚠️ ERRORES DETECTADOS EN CARGAS</h2>
+                <button onclick="closeDiscrepancyModal()" class="text-gray-600 hover:text-gray-900 text-3xl font-bold">&times;</button>
+            </div>
+            <div id="discrepancyContent" class="space-y-4"></div>
+            <div class="flex gap-3 justify-end mt-8 pt-4 border-t-2 border-gray-200">
+                <button onclick="closeDiscrepancyModal()" class="px-6 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 text-lg">Entendido, Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/modules/utils.js"></script>
+    <script src="js/modules/data.js"></script>
+    <script src="js/modules/detailGroups.js"></script>
+    <script src="js/modules/summaryGerencial.js"></script>
+    <script src="js/modules/crudos.js"></script>
+    <script src="js/modules/mezclas.js"></script>
+    <script src="js/modules/summary.js"></script>
+    <script src="js/modules/export.js"></script>
+    <script src="js/modules/orchestrator.js"></script>
+    <script>
+        // Auto-test: si se abre con ?autotest=1 intentamos cargar 'ultimo.xlsx' automáticamente
+        (async function(){
+            try {
+                const params = new URLSearchParams(location.search);
+                if (!params.has('autotest')) return;
+                if (!window.processArrayBuffer) { console.warn('processArrayBuffer no está disponible todavía'); return; }
+                const resp = await fetch('ultimo.xlsx');
+                if (!resp.ok) { console.warn('No se pudo cargar ultimo.xlsx desde el servidor local'); return; }
+                const ab = await resp.arrayBuffer();
+                processArrayBuffer(ab);
+            } catch (e) { console.error('Autotest error', e); }
+        })();
+    </script>
+</body>
+</html>
