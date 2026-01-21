@@ -33,7 +33,6 @@
         <button onclick="switchTab('balanceView', this)" class="tab-btn tab-inactive text-purple-800">RESUMEN:</button>
     </div>
     
-    <!-- Vistas (módulos) -->
     <div id="detailView" class="table-wrapper hidden rounded-tl-none border-t-0">
         <table id="groupsTable" class="min-w-full border-collapse w-full">
             <thead id="groupsHead"></thead>
@@ -103,7 +102,6 @@
         </div>
     </div>
 
-    <!-- Modales (se mantienen en index para simplificar integración) -->
     <div id="moveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
             <h2 class="text-xl font-bold text-slate-800 mb-6">Reclasificar Hilado</h2>
@@ -179,15 +177,16 @@
         </div>
     </div>
 
-    <script src="js/modules/utils.js"></script>
-    <script src="js/modules/data.js"></script>
-    <script src="js/modules/detailGroups.js"></script>
-    <script src="js/modules/summaryGerencial.js"></script>
-    <script src="js/modules/crudos.js"></script>
-    <script src="js/modules/mezclas.js"></script>
-    <script src="js/modules/summary.js"></script>
-    <script src="js/modules/export.js"></script>
-    <script src="js/modules/orchestrator.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/detailGroups.js"></script>
+    <script src="js/summaryGerencial.js"></script>
+    <script src="js/crudos.js"></script>
+    <script src="js/mezclas.js"></script>
+    <script src="js/summary.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/orchestrator.js"></script>
+    
     <script>
         // Auto-test: si se abre con ?autotest=1 intentamos cargar 'ultimo.xlsx' automáticamente
         (async function(){
