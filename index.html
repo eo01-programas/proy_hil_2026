@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PCP Viewer 2026 - Gestión Total (Modular)</title>
+    
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="p-4 h-screen flex flex-col overflow-auto text-slate-800">
@@ -19,7 +21,7 @@
         <div class="flex gap-3 items-center bg-white p-2 rounded-lg shadow-sm border border-slate-200">
             <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" onchange="processFile()" class="block w-60 text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold cursor-pointer hover:file:bg-blue-100"/>
             <button onclick="exportToExcel()" id="btnExport" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded text-xs shadow transition-colors">EXCEL</button>
-            <div id="appVersion" class="text-xs text-slate-400 ml-4">v?</div>
+            <div id="appVersion" class="text-xs text-slate-400 ml-4">v1.0</div>
         </div>
     </div>
 
@@ -188,14 +190,14 @@
     <script src="js/orchestrator.js"></script>
     
     <script>
-        // Auto-test: si se abre con ?autotest=1 intentamos cargar 'ultimo.xlsx' automáticamente
+        // Auto-test opcional para desarrollo local
         (async function(){
             try {
                 const params = new URLSearchParams(location.search);
                 if (!params.has('autotest')) return;
                 if (!window.processArrayBuffer) { console.warn('processArrayBuffer no está disponible todavía'); return; }
                 const resp = await fetch('ultimo.xlsx');
-                if (!resp.ok) { console.warn('No se pudo cargar ultimo.xlsx desde el servidor local'); return; }
+                if (!resp.ok) { console.warn('No se pudo cargar ultimo.xlsx'); return; }
                 const ab = await resp.arrayBuffer();
                 processArrayBuffer(ab);
             } catch (e) { console.error('Autotest error', e); }
