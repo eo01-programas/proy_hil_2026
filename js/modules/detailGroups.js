@@ -30,9 +30,63 @@ function addManualRow(tableId, isAlgodon) {
 }
 
 function updateRowTotal(input) {
-    // No realizar sumas ni mostrar totales. Esta función solo mantiene la edición
-    // de valores en la fila; no hay columna de total vertical.
-    return;
+    // Recalcula el footer (TOTAL SUMA) usando las filas visibles en la tabla.
+    try {
+        const tbody = input && input.closest ? input.closest('tbody') : document.getElementById('groupsBody');
+        if (!tbody) return;
+
+        const visibleRows = Array.from(tbody.querySelectorAll('tr'));
+        const totalSums = activeIndices.map(() => 0);
+
+        visibleRows.forEach(tr => {
+            if (!tr || tr.offsetParent === null) return; // fila oculta via CSS
+            const joined = (tr.textContent || '').toString().toUpperCase();
+            if (joined.includes('TOTAL')) return; // excluir filas que contienen 'TOTAL'
+            activeIndices.forEach((idx, pos) => {
+                const cell = tr.children[3 + pos];
+                if (!cell) return;
+                // Si la celda contiene un input (fila manual), tomar su valor; si no, tomar texto
+                const inputEl = cell.querySelector('input');
+                const txt = inputEl ? (inputEl.value || '') : (cell.textContent || '');
+                const val = parseLocaleNumber(txt === '-' ? 0 : txt);
+                totalSums[pos] += (typeof val === 'number' ? val : 0);
+            });
+        });
+
+        // Reconstruir HTML del footer (igual que en renderDetailTable)
+        const footer = document.getElementById('groupsFooter');
+        if (!footer) return;
+
+        let excelTotalRowHtml = '';
+        if (typeof excelGroupTotals !== 'undefined' && Array.isArray(excelGroupTotals)) {
+            const cells = activeIndices.map((idx, pos) => {
+                const v = excelGroupTotals[idx] || 0;
+                return `<td class="text-right px-2 border-l border-gray-100 font-semibold">${formatNumber(v)}</td>`;
+            }).join('');
+            excelTotalRowHtml = `<tr class="bg-slate-50 font-bold"><td class="pl-4 text-sm">TOTAL (Excel)</td><td></td><td></td>${cells}</tr>`;
+        }
+
+        const sumaCells = activeIndices.map((idx, pos) => {
+            const sumVal = totalSums[pos] || 0;
+            let cls = 'text-right px-2 border-l border-gray-100 font-semibold';
+            let disp = formatNumber(sumVal);
+            let clickable = '';
+            if (typeof excelGroupTotals !== 'undefined' && Array.isArray(excelGroupTotals)) {
+                const excelVal = excelGroupTotals[idx] || 0;
+                const diff = Math.round(Math.abs((sumVal || 0) - (excelVal || 0)));
+                if (diff > 0) {
+                    cls += ' bg-red-50 text-red-800';
+                    clickable = ` onclick="showDiscrepancyModal(${idx})" style="cursor:pointer" title="Ver diferencia"`;
+                }
+            }
+            return `<td class="${cls}"${clickable}>${disp}</td>`;
+        }).join('');
+
+        const sumaRowHtml = `<tr class="bg-white font-bold"><td class="pl-4 text-sm">TOTAL SUMA</td><td></td><td></td>${sumaCells}</tr>`;
+        footer.innerHTML = `${excelTotalRowHtml}${sumaRowHtml}`;
+    } catch (e) {
+        console.error('updateRowTotal error', e);
+    }
 }
 
 function renderDetailTable() {
@@ -42,8 +96,13 @@ function renderDetailTable() {
     
     // Renderizar exactamente las filas visibles (ya filtradas en ingestión)
     GLOBAL_ITEMS.forEach(row => {
-        // Detectar bloques especiales y asignar color
+        // Construir texto combinado y ocultar filas de comentarios importados (clientes varios, proyección, reserva)
         const txt = ((row.line||'') + '|' + (row.client||'') + '|' + (row.yarn||'')).toString().toUpperCase();
+        if (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA')) return;
+        // Omitir filas que no tengan datos en las columnas visibles (todos los meses 0 o vacíos)
+        const rowSum = activeIndices.reduce((s, idx) => s + (parseLocaleNumber((row.values && row.values[idx]) || 0) || 0), 0);
+        if (Math.abs(rowSum) < 0.01) return;
+        // Detectar bloques especiales y asignar color
         let specialClass = '';
         if (txt.includes('REVERSA')) {
             specialClass = 'bg-amber-50 text-amber-900';
@@ -67,17 +126,18 @@ function renderDetailTable() {
         tbody.innerHTML += `<tr class="${rowClass}"><td class="pl-4 text-xs text-gray-600">${row.line}</td><td class="text-xs text-gray-600">${row.client}</td><td class="text-xs text-gray-600">${row.yarn}</td>${cellsHTML}</tr>`;
     });
 
-    // Mantener el footer vacío (sin cálculos ni comparaciones)
     // Construir footer: mostrar Excel TOTAL (si existe) y TOTAL SUMA calculado
     const footer = document.getElementById('groupsFooter');
-    // Calcular TOTAL SUMA (sumar por columna, excluyendo filas que contienen 'TOTAL')
+    // Calcular TOTAL SUMA usando los mismos filtros que usamos al renderizar (sobre GLOBAL_ITEMS).
     const totalSums = activeIndices.map(() => 0);
     GLOBAL_ITEMS.forEach(row => {
-        const joined = ((row.line||'') + '|' + (row.client||'') + '|' + (row.yarn||'')).toString().toUpperCase();
-        if (joined.includes('TOTAL')) return; // excluir fila TOTAL en la suma
+        const txt = ((row.line||'') + '|' + (row.client||'') + '|' + (row.yarn||'')).toString().toUpperCase();
+        if (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA')) return;
+        const rowSum = activeIndices.reduce((s, idx) => s + (parseLocaleNumber((row.values && row.values[idx]) || 0) || 0), 0);
+        if (Math.abs(rowSum) < 0.01) return;
         activeIndices.forEach((idx, pos) => {
-            const v = row.values[idx] || 0;
-            totalSums[pos] += (typeof v === 'number') ? v : (parseFloat(v) || 0);
+            const v = parseLocaleNumber((row.values && row.values[idx]) || 0) || 0;
+            totalSums[pos] += v;
         });
     });
 
@@ -97,7 +157,6 @@ function renderDetailTable() {
         let cls = 'text-right px-2 border-l border-gray-100 font-semibold';
         let disp = formatNumber(sumVal);
         let clickable = '';
-        // comparar con excelGroupTotals si existe
         if (typeof excelGroupTotals !== 'undefined' && Array.isArray(excelGroupTotals)) {
             const excelVal = excelGroupTotals[idx] || 0;
             const diff = Math.round(Math.abs((sumVal || 0) - (excelVal || 0)));
