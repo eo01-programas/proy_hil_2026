@@ -107,10 +107,14 @@ function processFile() {
 
             recalcAll();
 
-            document.getElementById('tabContainer').classList.remove('hidden');
-            document.getElementById('detailView').classList.remove('hidden');
-            document.getElementById('btnExport').classList.remove('hidden');
-            document.getElementById('debugInfo').classList.remove('hidden');
+            const _tabContainer = document.getElementById('tabContainer');
+            if (_tabContainer) _tabContainer.classList.remove('hidden');
+            const _detailView = document.getElementById('detailView');
+            if (_detailView) _detailView.classList.remove('hidden');
+            const _btnExport = document.getElementById('btnExport');
+            if (_btnExport) _btnExport.classList.remove('hidden');
+            const _debugContainer = document.getElementById('debugContainer');
+            if (_debugContainer) _debugContainer.classList.remove('hidden');
 
             const grandSum = grandTotalVector.reduce((a,b) => a+b, 0);
             const excelGroupSum = (excelGroupTotals && Array.isArray(excelGroupTotals)) ? excelGroupTotals.reduce((a,b) => a+b, 0) : 0;
@@ -124,7 +128,8 @@ function processFile() {
 
             // Nota: no mostramos la lista detallada de filas ocultas para mantener la UI limpia.
 
-            document.getElementById('debugInfo').innerHTML = debugHtml;
+            const _debugInfo = document.getElementById('debugInfo');
+            if (_debugInfo) _debugInfo.innerHTML = debugHtml;
 
         } catch (err) {
             console.error(err);
@@ -161,10 +166,14 @@ async function processArrayBuffer(buffer) {
 
         recalcAll();
 
-        document.getElementById('tabContainer').classList.remove('hidden');
-        document.getElementById('detailView').classList.remove('hidden');
-        document.getElementById('btnExport').classList.remove('hidden');
-        document.getElementById('debugInfo').classList.remove('hidden');
+        const _tabContainer = document.getElementById('tabContainer');
+        if (_tabContainer) _tabContainer.classList.remove('hidden');
+        const _detailView = document.getElementById('detailView');
+        if (_detailView) _detailView.classList.remove('hidden');
+        const _btnExport = document.getElementById('btnExport');
+        if (_btnExport) _btnExport.classList.remove('hidden');
+        const _debugContainer = document.getElementById('debugContainer');
+        if (_debugContainer) _debugContainer.classList.remove('hidden');
 
         const grandSum = grandTotalVector.reduce((a,b) => a+b, 0);
         const excelGroupSum = (excelGroupTotals && Array.isArray(excelGroupTotals)) ? excelGroupTotals.reduce((a,b) => a+b, 0) : 0;
@@ -178,7 +187,8 @@ async function processArrayBuffer(buffer) {
 
         // Nota: no mostramos la lista detallada de filas ocultas para mantener la UI limpia.
 
-        document.getElementById('debugInfo').innerHTML = debugHtml;
+        const _debugInfo = document.getElementById('debugInfo');
+        if (_debugInfo) _debugInfo.innerHTML = debugHtml;
 
     } catch (err) {
         console.error(err);
