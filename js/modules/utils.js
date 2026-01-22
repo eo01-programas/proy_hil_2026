@@ -4,13 +4,13 @@ const MONTH_NAMES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SE
 const ORDERED_COTTON_KEYS = [
     "ALGODÓN PIMA NC (QQ)",
     "ALGODÓN PIMA ORGANICO - OCS (QQ)",
-    "ALGODÓN PIMA ORGANICO - GOTS (QQ)",
     "ALGODÓN TANGUIS NC BCI (QQ)",
     "ALGODÓN ORGANICO - GOTS (QQ)",
     "ALGODÓN ORGANICO - OCS (QQ)",
     "ALGODÓN UPLAND USTCP (QQ)",
     "ALGODÓN UPLAND (QQ)",
-    "ALGODÓN ELEGANT (QQ)"
+    "ALGODÓN ELEGANT (QQ)",
+    "ALGODÓN PIMA ORGANICO - GOTS (QQ)"
 ];
 
 const ORDERED_OTHER_KEYS = [
@@ -130,6 +130,10 @@ function isOtherFiberToken(t) {
 function getPercentages(yarn) {
     if (!yarn) return [];
     let s = yarn.toString();
+    // Insertar espacio cuando números están pegados al texto (p.ej. LYOCELL50/30/20% -> LYOCELL 50/30/20%)
+    try {
+        s = s.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])(?=\d)/g, '$1 ');
+    } catch (e) { /* ignore regex issues on exotic environments */ }
     s = s.replace(/\s+(HTR|NC|STD)\s*$/i, '');
     const patterns = [
         /\(\s*(\d{1,3}(?:[\s\/]\s*\d{1,3})+)\s*%?\s*\)/,
@@ -154,6 +158,21 @@ function getPercentages(yarn) {
             if (allValid && sumValid) return result;
         }
     }
+    // Fallback: buscar cualquier secuencia de porcentajes tipo 50/30/20 o 50/30/20% incluso si está pegado a palabras
+    try {
+        const m = s.match(/(\d{1,3}(?:\/\d{1,3})+)\%?/);
+        if (m) {
+            const parts = m[1].trim().split(/\//).map(p => p.replace(/%/g,'').trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                const numParts = parts.map(n => parseFloat(n));
+                const sum = numParts.reduce((a,b)=>a+b,0);
+                let result = numParts.map(n => n > 1 ? n/100 : n);
+                const allValid = result.every(p => !isNaN(p) && p > 0 && p <= 1);
+                const sumValid = Math.abs(result.reduce((a,b)=>a+b,0) - 1.0) < 0.05;
+                if (allValid && sumValid) return result;
+            }
+        }
+    } catch(e) { /* ignore fallback errors */ }
     return [];
 }
 
