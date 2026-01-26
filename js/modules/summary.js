@@ -10,16 +10,16 @@ try {
 
 function renderBalanceView() {
     const table = document.getElementById('balanceTable');
-    let html = `<thead class="sum-header-top"><tr><th class="py-2 px-3 text-left w-64">CONCEPTO</th>${generateCellsHTML(null, true)}</tr></thead><tbody class="bg-white text-gray-700">`;
+    let html = `<thead class="sum-header-top"><tr><th class="py-2 px-3 text-left w-64">CONCEPTO</th>${generateCellsHTML(null, true, '', true)}</tr></thead><tbody class="bg-white text-gray-700">`;
     let totalLineasVec = new Array(12).fill(0);
     Object.keys(lineSummary).sort().forEach(l => { for(let k=0; k<12; k++) totalLineasVec[k] += lineSummary[l].values[k]; });
-    html += `<tr class="bg-blue-50 font-bold text-blue-900"><td class="py-2 px-3 text-right">A. TOTAL DEMANDA (DETALLE):</td>${generateCellsHTML(totalLineasVec)}</tr>`;
+    html += `<tr class="bg-blue-50 font-bold text-blue-900"><td class="py-2 px-3 text-right">A. TOTAL DEMANDA (DETALLE):</td>${generateCellsHTML(totalLineasVec, false, '', true)}</tr>`;
     const crudoRawVec = globalCrudoRaw.slice();
     const mezclaRawVec = globalMezclaRaw.slice();
     const totalRawVec = crudoRawVec.map((v,i) => v + mezclaRawVec[i]);
-    html += `<tr class="bg-indigo-50 font-bold text-indigo-900 border-t border-indigo-200"><td class="py-2 px-3 text-right">B1. TOTAL PESO HILADOS - CRUDOS (BRUTO):</td>${generateCellsHTML(crudoRawVec)}</tr>`;
-    html += `<tr class="bg-orange-50 font-bold text-orange-900"><td class="py-2 px-3 text-right">B2. TOTAL PESO HILADOS - MEZCLAS (BRUTO):</td>${generateCellsHTML(mezclaRawVec)}</tr>`;
-    html += `<tr class="bg-indigo-100 font-bold text-indigo-900"><td class="py-2 px-3 text-right">B. TOTAL PESO HILADOS (CRUDOS+MEZCLAS BRUTO):</td>${generateCellsHTML(totalRawVec)}</tr>`;
+    html += `<tr class="bg-indigo-50 font-bold text-indigo-900 border-t border-indigo-200"><td class="py-2 px-3 text-right">B1. TOTAL PESO HILADOS - CRUDOS (BRUTO):</td>${generateCellsHTML(crudoRawVec, false, '', true)}</tr>`;
+    html += `<tr class="bg-orange-50 font-bold text-orange-900"><td class="py-2 px-3 text-right">B2. TOTAL PESO HILADOS - MEZCLAS (BRUTO):</td>${generateCellsHTML(mezclaRawVec, false, '', true)}</tr>`;
+    html += `<tr class="bg-indigo-100 font-bold text-indigo-900"><td class="py-2 px-3 text-right">B. TOTAL PESO HILADOS (CRUDOS+MEZCLAS BRUTO):</td>${generateCellsHTML(totalRawVec, false, '', true)}</tr>`;
     const checkVec = totalLineasVec.map((v, i) => v - totalRawVec[i]);
     const checkTotal = checkVec.reduce((a,b)=>a+b,0);
     const isPerfect = Math.abs(checkTotal) < 1;
@@ -1003,7 +1003,7 @@ function buildFiberDetail(tokenMatcher, merma = 0.40) {
 function renderFiberTable(tableId, dataObj, orderedKeys, isAlgodon) {
     const table = document.getElementById(tableId);
     if (!table) return;
-    let html = `<thead class="sum-header-top"><tr><th class="py-2 px-3 text-left">FIBRA</th>${generateCellsHTML(null, true)}</tr></thead><tbody class="bg-white">`;
+    let html = `<thead class="sum-header-top"><tr><th class="py-2 px-3 text-left">FIBRA</th>${generateCellsHTML(null, true)}<th class="text-right px-2 py-1 w-14">TOTAL</th></tr></thead><tbody class="bg-white">`;
     
     let strictTotalVec = new Array(12).fill(0);
 
@@ -1017,13 +1017,16 @@ function renderFiberTable(tableId, dataObj, orderedKeys, isAlgodon) {
         const bgClass = isAlgodon ? 'bg-blue-100 hover:bg-blue-200 border-blue-300' : 'bg-amber-100 hover:bg-amber-200 border-amber-300';
         const textClass = isAlgodon ? 'text-blue-900' : 'text-amber-900';
         
+        const rowSum = (fiberData.totalValues || []).reduce((a,b)=>a+(b||0),0);
         html += `<tr class="${bgClass} cursor-pointer border-b-2" data-fiber-name="${fiberDisplay}" data-is-algodon="${isAlgodon}" onclick="openFiberModalByName(this.getAttribute('data-fiber-name'), ${isAlgodon})">
                     <td class="py-2 px-3 font-bold ${textClass} pl-4">${fiberDisplay}</td>
                     ${generateCellsHTML(fiberData.totalValues).replace(/^/gm, '')}
+                    <td class="text-right px-2 font-bold text-${isAlgodon ? 'blue' : 'amber'}-900">${formatNumber(rowSum)}</td>
                 </tr>`;
     });
     
-    html += `<tr class="grand-total-row"><td class="py-2 px-3 text-right font-bold">TOTAL:</td>${generateCellsHTML(strictTotalVec)}</tr>`;
+    const grandTotalSum = strictTotalVec.reduce((a,b)=>a+(b||0),0);
+    html += `<tr class="grand-total-row"><td class="py-2 px-3 text-right font-bold">TOTAL:</td>${generateCellsHTML(strictTotalVec)}<td class="text-right px-2 font-bold">${formatNumber(grandTotalSum)}</td></tr>`;
     html += `</tbody>`;
     table.innerHTML = html;
 }
