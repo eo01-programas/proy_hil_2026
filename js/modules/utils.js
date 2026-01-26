@@ -79,9 +79,9 @@ function getNormalizedComponent(rawName) {
     if (u.includes('ORGANICO')) return 'ALG_ORG';
     if (u.includes('TANGUIS') && u.includes('BCI')) return 'TANGUIS_BCI';
     if (u.includes('UPLAND') && u.includes('USTCP')) return 'UPLAND_USTCP';
-    u = u.replace(/\bSTD\b/g, '').replace(/\bHTR\b/g, '').replace(/\bNC\b/g, '').replace(/\bOCS\b/g, '')
-         .replace(/\bGOTS\b/g, '').replace(/\bBCI\b/g, '').replace(/\bUSTCP\b/g, '')
-         .replace(/[0-9\/\%()[\]]/g, '').replace(/\s+/g, ' ').trim();
+        u = u.replace(/\bSTD\b/g, '').replace(/\bHTR\b/g, '').replace(/\bHEATHER\b/g, '').replace(/\bNC\b/g, '').replace(/\bOCS\b/g, '')
+            .replace(/\bGOTS\b/g, '').replace(/\bBCI\b/g, '').replace(/\bUSTCP\b/g, '')
+            .replace(/[0-9\/\%()[\]]/g, '').replace(/\s+/g, ' ').trim();
     if (u.includes('PIMA')) return 'PIMA';
     if (u.includes('TANGUIS')) return 'TANGUIS';
     if (u.includes('UPLAND') || u.includes('FLAME')) return 'UPLAND';
@@ -91,9 +91,9 @@ function getNormalizedComponent(rawName) {
     if (u.includes('VISCOSA')) return 'VISCOSA';
     if (u.includes('MODAL')) return 'MODAL';
     if (u.includes('MERINO') || u.includes('WOOL')) return 'WOOL';
-    if ((u.includes('PES') || u.includes('POLY')) && (u.includes('REPREVE') || u.includes('PREPREVE') || u.includes('PREPEVE'))) return 'PES_REPREVE';
-    if (u.includes('RECYCLED') || u.includes('RECICLADO')) return 'PES_RECYCLED';
-    if ((u.includes('PES') || u.includes('POLY'))) return 'POLYESTER';
+    if (u.includes('PES') && (u.includes('REPREVE') || u.includes('PREPREVE') || u.includes('PREPEVE'))) return 'PES_REPREVE';
+    // Note: REPREVE/PREPREVE handled above; do not classify generic 'RECYCLED' alone as PES_RECYCLED
+    if (u.includes('PES')) return 'POLYESTER';
     if (u.includes('NYLON')) return 'NYLON';
     if (u.includes('LINO')) return 'LINO';
     if (u.includes('CAÑAMO') || u.includes('CANAMO')) return 'HEMP';
@@ -124,7 +124,7 @@ function getComponentPriority(compName) {
 function isOtherFiberToken(t) {
     if (!t) return false;
     const u = t.toString().toUpperCase();
-    return /LYOCELL|TENCEL|NYLON|REPREVE|PES|MODAL|ABETE|CAÑAMO|CANAMO|WOOL|MERINO|VISCOSA|VISCOSE|POLY|POLYESTER|LINO/.test(u);
+    return /LYOCELL|TENCEL|NYLON|REPREVE|PES|MODAL|ABETE|CAÑAMO|CANAMO|WOOL|MERINO|VISCOSA|VISCOSE|POLYESTER|LINO/.test(u);
 }
 
 function getPercentages(yarn) {
@@ -134,7 +134,7 @@ function getPercentages(yarn) {
     try {
         s = s.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])(?=\d)/g, '$1 ');
     } catch (e) { /* ignore regex issues on exotic environments */ }
-    s = s.replace(/\s+(HTR|NC|STD)\s*$/i, '');
+    s = s.replace(/\s+(HTR|NC|STD|HEATHER)\s*$/i, '');
     const patterns = [
         /\(\s*(\d{1,3}(?:[\s\/]\s*\d{1,3})+)\s*%?\s*\)/,
         /\[\s*(\d{1,3}(?:[\s\/]\s*\d{1,3})+)\s*%?\s*\]/,
@@ -180,6 +180,18 @@ function cleanImportedName(yarnRaw, clientRaw) {
     if (!yarnRaw) return "";
     let s = yarnRaw.toString().toUpperCase().trim();
     const client = (clientRaw || "").toString().toUpperCase().trim();
+    
+    // REGLA 1: Cambiar "PES PREPREVE" a "PES REPREVE"
+    s = s.replace(/PES\s+PREPREVE/gi, 'PES REPREVE');
+    
+    // REGLA 2: Eliminar los términos "HTR" y "HEATHER" completamente del hilado
+    // Eliminar HTR o HEATHER al final
+    s = s.replace(/\s+(HTR|HEATHER)\s*$/i, '').trim();
+    // Eliminar HTR o HEATHER como palabra completa en cualquier posición
+    s = s.replace(/\b(?:HTR|HEATHER)\b/gi, '').trim();
+    // Limpiar espacios múltiples resultantes
+    s = s.replace(/\s+/g, ' ').trim();
+    
     const orgRegex = /\b(ORGANICO|ORGANIC|ORG\.?)/gi;
     if (orgRegex.test(s)) {
         const cert = (client === "LLL") ? "(OCS)" : "(GOTS)";
@@ -193,9 +205,9 @@ function cleanImportedName(yarnRaw, clientRaw) {
 function getComponentNames(yarn) {
     if (!yarn) return [];
     let clean = yarn.toString().toUpperCase();
-    clean = clean.replace(/^\d+\/\d+\s+/, '').replace(/\s+\d{1,3}[\s\/]\d{1,3}%?\s*$/, '').replace(/\s+\d{1,3}%\s*$/, '').replace(/\b(STD|HTR|NC)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    clean = clean.replace(/^\d+\/\d+\s+/, '').replace(/\s+\d{1,3}[\s\/]\d{1,3}%?\s*$/, '').replace(/\s+\d{1,3}%\s*$/, '').replace(/\b(STD|HTR|NC|HEATHER)\b/gi, ' ').replace(/\s+/g, ' ').trim();
     const cottonKeywords = ['PIMA', 'TANGUIS', 'UPLAND', 'COP', 'ALGODON', 'COTTON', 'FLAME', 'ELEGANT', 'BCI', 'OCS', 'GOTS', 'USTCP', 'ORGANICO'];
-    const otherFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'POLY', 'REPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
+    const otherFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
     const components = [];
     if (cottonKeywords.some(kw => clean.includes(kw))) components.push(extractCottonName(yarn));
     otherFibers.filter(fiber => clean.includes(fiber)).forEach(fiber => components.push(fiber));
@@ -229,7 +241,7 @@ function hasMultipleFiberTypes(yarn) {
     if (!yarn) return false;
     const upper = yarn.toString().toUpperCase().replace(/^\d+\/\d+\s+/, '');
     const hasPercentages = /\d{1,3}[\s\/]\d{1,3}%?/.test(upper) || /\d{1,3}%/.test(upper);
-    const nonCottonFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'POLY', 'REPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
+    const nonCottonFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
     const cottonKeywords = ['PIMA', 'TANGUIS', 'UPLAND', 'COP', 'ALGODON', 'COTTON', 'FLAME', 'ELEGANT'];
     const hasCotton = cottonKeywords.some(kw => upper.includes(kw));
     const hasOtherFiber = nonCottonFibers.some(fiber => upper.includes(fiber));
@@ -249,7 +261,7 @@ function hasMultipleFiberTypes(yarn) {
 
 function splitComponentsByKeywords(componentStr, expectedCount) {
     const s = componentStr.trim();
-    const fiberKeywords = ['TENCEL','LYOCELL','VISCOSE','PIMA','ALGODON','COTTON','POLYESTER','POLY','PES','ELASTANO','NYLON','MODAL','WOOL','ACRYLIC'];
+    const fiberKeywords = ['TENCEL','LYOCELL','VISCOSE','PIMA','ALGODON','COTTON','POLYESTER','PES','ELASTANO','NYLON','MODAL','WOOL','ACRYLIC'];
     const matches = [];
     let m;
     const regex = new RegExp('\\b(' + fiberKeywords.join('|') + ')\\b', 'ig');
@@ -352,4 +364,25 @@ function classifyItem(item) {
     if (lineaUpper === "HTR") return isMultiFiber ? 'MEZCLA' : 'CRUDO';
     if (isMultiFiber) return 'MEZCLA';
     return 'CRUDO';
+}
+// Helper: Extract component names from a mixed yarn, preserving type qualifiers like A100, STD, NANO
+function extractComponentNamesPreserveQualifiers(titleStr) {
+    if (!titleStr) return [];
+    
+    // Split by "/" and preserve everything including qualifiers
+    const parts = titleStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
+    const fiberKeywords = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE', 'PIMA', 'ALGODON', 'COTTON', 'COP', 'TANGUIS', 'UPLAND'];
+    
+    const components = [];
+    
+    parts.forEach(part => {
+        const partUpper = part.toUpperCase();
+        // Check if this part contains a fiber keyword; if so, preserve it as-is (with qualifiers)
+        const hasFiber = fiberKeywords.some(kw => partUpper.includes(kw));
+        if (hasFiber) {
+            components.push(part);
+        }
+    });
+    
+    return components.length > 0 ? components : parts; // fallback: return all parts if no fiber matched
 }
