@@ -36,9 +36,11 @@ function renderMezclasTable() {
         // find a sample item in this group early (used by splitting heuristics)
         const firstItemWithYarn = Array.from(GLOBAL_ITEMS).find(item => group.uniqueYarns.has(item.id));
         // Remove trailing percentage parenthesis like "(75/25%)" for splitting purposes
-        const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/,'').trim();
+        // IMPORTANT: Preserve type qualifiers like A100, STD, NANO, etc. before the percentages
+        const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/, '').trim();
         let titleParts = [];
         if (titleNoPct.indexOf('/') >= 0) {
+            // Split by "/" but preserve full fiber names with qualifiers (e.g., "LYOCELL A100", "LYOCELL STD")
             titleParts = titleNoPct.split('/').map(s => s.trim()).filter(Boolean);
         } else {
             // If no slash, try to split by keyword heuristics using detected percentage count
@@ -172,17 +174,25 @@ function renderMezclasTable() {
             `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${fullTitle}</td></tr>`
         );
         
-        // Auto-extract and confirm percentages from title (console log only for MAT. MEZCLAS)
-        console.log('=== PROCESO EXTRACCIÓN % PARTICIPACIÓN ===');
-        console.log(`Grupo: ${fullTitle}`);
-        if (titleParts.length >= 2) {
-            titleParts.forEach((part, idx) => {
-                const pct = titlePctArr[idx] ? Math.round(titlePctArr[idx] * 100) : 0;
-                console.log(`Material ${idx + 1}: ${part}`);
-                console.log(`% Participación ${idx + 1}: ${pct}`);
-            });
-        }
-        console.log('Iniciando cálculos de Kg REQ...');
+        // Auto-extract and confirm percentages from title (console log for MAT. MEZCLAS)
+        // Print detailed breakdown for each mixture showing material composition and percentages
+        try {
+            const sampleYarn = firstItemWithYarn ? (firstItemWithYarn.yarn || '') : '(sin hilado)';
+            console.groupCollapsed(`📋 MEZCLA: ${fullTitle}`);
+            console.log(`Nombre del hilado: ${sampleYarn}`);
+            
+            if (titleParts.length >= 2) {
+                titleParts.forEach((part, idx) => {
+                    const pct = titlePctArr[idx] ? Math.round(titlePctArr[idx] * 100) : 0;
+                    console.log(`Materia ${idx + 1}: ${part}`);
+                    console.log(`% Participación ${idx + 1}: ${pct}%`);
+                });
+            } else if (titleParts.length === 1) {
+                console.log(`Materia 1: ${titleParts[0]}`);
+                console.log(`% Participación 1: 100%`);
+            }
+            console.groupEnd();
+        } catch (e) { /* ignore log errors */ }
         // group._pctSaved will be set after validating/normalizing extracted percentages
 
         // Recompute percentages based on material components
@@ -193,8 +203,15 @@ function renderMezclasTable() {
             group.componentPercentages[matComp] = groupTotalForPercentages > 0 ? compTotal / groupTotalForPercentages : 0;
         });
         
-        // Order: ALGODONES first (in title order), then OTHER FIBERS (in title order)
-        const sortedMatComponents = [];
+        // IMPORTANT: Build percentage map BEFORE reordering to preserve titleParts[i] <-> titlePctArr[i] mapping
+        const pctMapByOriginalOrder = {};
+        if (titlePctArr && titlePctArr.length === titleParts.length) {
+            for (let i = 0; i < titleParts.length; i++) {
+                pctMapByOriginalOrder[titleParts[i]] = titlePctArr[i];
+            }
+        }
+
+        // Now reorder for display: ALGODONES first (in title order), then OTHER FIBERS (in title order)
         const cottonComps = [];
         const otherComps = [];
         
@@ -213,6 +230,42 @@ function renderMezclasTable() {
             parsedPctArr = titlePctArr.slice();
         } else if (firstItemWithYarn) {
             parsedPctArr = getPercentages(firstItemWithYarn.yarn || '') || [];
+
+            // If we found percentages in the yarn but they are not explicitly ordered by title,
+            // attempt to align them to the order of components as they appear in the yarn string.
+            // This ensures strings like "30/1 MODAL / COP ORGANICO (OCS) (75/25%)"
+            // map 75% -> MODAL and 25% -> COP ORGANICO.
+            try {
+                if (parsedPctArr && parsedPctArr.length === titleParts.length && firstItemWithYarn && firstItemWithYarn.yarn) {
+                    const yarnComps = (firstItemWithYarn.yarn || '').toString().split('/').map(s => s.trim()).filter(Boolean);
+                    if (yarnComps.length >= parsedPctArr.length) {
+                        const mapped = new Array(parsedPctArr.length).fill(0);
+                        const usedTitleIdx = new Set();
+                        for (let p = 0; p < parsedPctArr.length; p++) {
+                            const yc = yarnComps[p].toUpperCase();
+                            // Find best matching titlePart that contains tokens from yarnComp
+                            let bestIdx = -1;
+                            for (let t = 0; t < titleParts.length; t++) {
+                                if (usedTitleIdx.has(t)) continue;
+                                const tp = (titleParts[t] || '').toUpperCase();
+                                // match if title part tokens are present in yarn component or viceversa
+                                if (tp && (yc.includes(tp) || tp.includes(yc) || yc.includes(tp.split(' ')[0]) || tp.includes(yc.split(' ')[0]))) { bestIdx = t; break; }
+                            }
+                            if (bestIdx === -1) {
+                                // fallback: assign to first unused title part
+                                for (let t = 0; t < titleParts.length; t++) { if (!usedTitleIdx.has(t)) { bestIdx = t; break; } }
+                            }
+                            if (bestIdx >= 0) {
+                                mapped[bestIdx] = parsedPctArr[p];
+                                usedTitleIdx.add(bestIdx);
+                            }
+                        }
+                        // If mapping produced non-zero entries, replace parsedPctArr with mapped order
+                        const nonZero = mapped.some(v => v && v > 0);
+                        if (nonZero) parsedPctArr = mapped.slice();
+                    }
+                }
+            } catch (e) { /* mapping best-effort; ignore failures */ }
         }
         // If not found on first yarn, try other yarns in the group
         if ((!parsedPctArr || parsedPctArr.length === 0) && group.uniqueYarns && group.uniqueYarns.size > 0) {
@@ -229,16 +282,21 @@ function renderMezclasTable() {
             finalOrder.forEach(mat => {
                 let pv = 0;
                 try {
-                    const canon = (typeof getStrictCanonicalToken === 'function') ? getStrictCanonicalToken(mat) : null;
-                    if (typeof materialPctMap !== 'undefined' && typeof materialPctMap[mat] !== 'undefined') pv = materialPctMap[mat];
-                    else if (typeof materialPctMap !== 'undefined' && canon && typeof materialPctMap[canon] !== 'undefined') pv = materialPctMap[canon];
-                    else if (parsedPctArr && parsedPctArr.length === titleParts.length) {
-                        const idxTitle = titleParts.indexOf(mat);
-                        if (idxTitle >= 0) { const raw = parsedPctArr[idxTitle] || 0; pv = (raw > 1) ? (raw/100) : raw; }
-                    }
-                    if ((!pv || pv === 0) && group.componentPercentages) {
-                        if (canon && typeof group.componentPercentages[canon] !== 'undefined') pv = group.componentPercentages[canon];
-                        else if (typeof group.componentPercentages[mat] !== 'undefined') pv = group.componentPercentages[mat];
+                    // PRIORITY 1: Use pctMapByOriginalOrder (preserves original titleParts[i] <-> titlePctArr[i] mapping)
+                    if (typeof pctMapByOriginalOrder !== 'undefined' && typeof pctMapByOriginalOrder[mat] !== 'undefined') {
+                        pv = pctMapByOriginalOrder[mat];
+                    } else {
+                        const canon = (typeof getStrictCanonicalToken === 'function') ? getStrictCanonicalToken(mat) : null;
+                        if (typeof materialPctMap !== 'undefined' && typeof materialPctMap[mat] !== 'undefined') pv = materialPctMap[mat];
+                        else if (typeof materialPctMap !== 'undefined' && canon && typeof materialPctMap[canon] !== 'undefined') pv = materialPctMap[canon];
+                        else if (parsedPctArr && parsedPctArr.length === titleParts.length) {
+                            const idxTitle = titleParts.indexOf(mat);
+                            if (idxTitle >= 0) { const raw = parsedPctArr[idxTitle] || 0; pv = (raw > 1) ? (raw/100) : raw; }
+                        }
+                        if ((!pv || pv === 0) && group.componentPercentages) {
+                            if (canon && typeof group.componentPercentages[canon] !== 'undefined') pv = group.componentPercentages[canon];
+                            else if (typeof group.componentPercentages[mat] !== 'undefined') pv = group.componentPercentages[mat];
+                        }
                     }
                 } catch (e) { pv = 0; }
                 pctCandidates[mat] = (pv || 0);
@@ -267,7 +325,8 @@ function renderMezclasTable() {
         try {
             const headerEl = document.getElementById(`group-header-${groupIndex}`);
             if (headerEl) {
-                const pctDisplay = Object.keys(pctCandidates).map(k => Math.round((pctCandidates[k]||0)*100)).join('/');
+                // Display percentages in TITLE ORDER (preserve original mapping), NOT finalOrder
+                const pctDisplay = titleParts.map(k => Math.round((pctCandidates[k]||0)*100)).join('/');
                 const headerHtml = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
                 headerEl.innerHTML = headerHtml;
             }
@@ -398,6 +457,15 @@ function renderMezclasTable() {
                 activeIndices.forEach(idx => { totalKgReq += (compVector[idx] / (1-defaultMerma/100)); });
                 kgCells += `<td class="text-right px-2 total-col font-bold text-orange-900">${formatNumber(totalKgReq)}</td>`;
                 tbody.innerHTML += `<tr class="row-req bg-orange-50"><td colspan="4" class="text-right pr-2 py-1 text-xs"><div class="flex items-center justify-end w-full"><span class="mr-1 text-orange-900 font-bold">KG REQ ${escapeHtml(displayLabel)}</span><input type="number" id="pct-m-${groupIndex}-${compIndex}" class="pct-input mr-2" value="${Math.round((pctVal || 0)*100)}" min="0" max="100" required placeholder="Requerido" title="El % de participación es obligatorio" oninput="recalcMezclaComponent(${groupIndex}, ${compIndex})"><span class="mr-1 text-orange-900 font-bold">(Merma</span><input type="number" id="merma-m-${groupIndex}-${compIndex}" class="merma-input" value="${defaultMerma}" min="0" max="99" oninput="recalcMezclaComponent(${groupIndex}, ${compIndex})"><span class="text-orange-900 font-bold">%):</span></div></td>${kgCells}</tr>`;
+                // Ensure the pct input reflects the parsed/selected candidate explicitly
+                try {
+                    const __pctEl = document.getElementById(`pct-m-${groupIndex}-${compIndex}`);
+                    if (__pctEl) {
+                        __pctEl.value = String(Math.round((pctCandidates[matCompName] || 0) * 100));
+                        __pctEl.style.border = '';
+                        __pctEl.style.backgroundColor = '';
+                    }
+                } catch (e) { /* ignore */ }
 
                 let qqCells = activeIndices.map(idx => {
                     const base = compVector[idx] || 0;
@@ -419,27 +487,38 @@ function renderMezclasTable() {
                 activeIndices.forEach(idx => { totalReq += (compVector[idx] / (1-defaultMerma/100)); });
                 reqCells += `<td class="text-right px-2 total-col font-bold text-orange-900">${formatNumber(totalReq)}</td>`;
                 tbody.innerHTML += `<tr class="row-req bg-orange-50"><td colspan="4" class="text-right pr-2 py-1 text-xs"><div class="flex items-center justify-end w-full"><span class="mr-1 text-orange-900 font-bold">KG REQ ${escapeHtml(displayLabel)}</span><input type="number" id="pct-m-${groupIndex}-${compIndex}" class="pct-input mr-2" value="${Math.round((pctVal || 0)*100)}" min="0" max="100" oninput="recalcMezclaComponent(${groupIndex}, ${compIndex})"><span class="mr-1 text-orange-900 font-bold">(Merma</span><input type="number" id="merma-m-${groupIndex}-${compIndex}" class="merma-input" value="${defaultMerma}" min="0" max="99" oninput="recalcMezclaComponent(${groupIndex}, ${compIndex})"><span class="text-orange-900 font-bold">%):</span></div></td>${reqCells}</tr>`;
+                // Ensure the pct input reflects the parsed/selected candidate explicitly
+                try {
+                    const __pctEl2 = document.getElementById(`pct-m-${groupIndex}-${compIndex}`);
+                    if (__pctEl2) {
+                        __pctEl2.value = String(Math.round((pctCandidates[matCompName] || 0) * 100));
+                        __pctEl2.style.border = '';
+                        __pctEl2.style.backgroundColor = '';
+                    }
+                } catch (e) { /* ignore */ }
             }
         }); 
         
         tbody.innerHTML += `<tr><td colspan="${4 + activeIndices.length + 1}" class="h-4"></td></tr>`; 
     });
     
-    const baseTotal = (globalMezclaBase || []).reduce((a,b)=>a+(b||0),0);
-    const htrTotal = (globalMezclaHTR || []).reduce((a,b)=>a+(b||0),0);
-    const combined = (globalMezclaBase || []).map((v,i) => (v||0) + (globalMezclaHTR||[])[i] || 0);
+    const baseTotal = (window.globalMezclaBase || []).reduce((a,b)=>a+(b||0),0);
+    const htrTotal = (window.globalMezclaHTR || []).reduce((a,b)=>a+(b||0),0);
+    const combined = (window.globalMezclaBase || []).map((v,i) => (v||0) + (window.globalMezclaHTR||[])[i] || 0);
     const combinedTotal = combined.reduce((a,b)=>a+(b||0),0);
-    document.getElementById('mezclasFooter').innerHTML = `<tr class="bg-orange-100 font-bold border-t-2 border-orange-500"><td colspan="4" class="text-right pr-4 py-2 text-orange-900">SUMA MEZCLA (BASE):</td>${generateCellsHTML(globalMezclaBase)}<td class="text-right px-2 font-bold text-orange-900">${formatNumber(baseTotal)}</td></tr><tr class="bg-orange-100 font-bold"><td colspan="4" class="text-right pr-4 py-2 text-orange-900">SUMA HTR (MEZCLA):</td>${generateCellsHTML(globalMezclaHTR)}<td class="text-right px-2 font-bold text-orange-900">${formatNumber(htrTotal)}</td></tr><tr class="grand-total-row" style="background-color: #7c2d12;"><td colspan="4" class="text-right pr-4 py-2">TOTAL MEZCLAS (BASE + HTR):</td>${generateCellsHTML(combined)}<td class="text-right px-2 font-bold">${formatNumber(combinedTotal)}</td></tr>`;
+    document.getElementById('mezclasFooter').innerHTML = `<tr class="bg-orange-100 font-bold border-t-2 border-orange-500"><td colspan="4" class="text-right pr-4 py-2 text-orange-900">SUMA MEZCLA (BASE):</td>${generateCellsHTML(window.globalMezclaBase)}<td class="text-right px-2 font-bold text-orange-900">${formatNumber(baseTotal)}</td></tr><tr class="bg-orange-100 font-bold"><td colspan="4" class="text-right pr-4 py-2 text-orange-900">SUMA HTR (MEZCLA):</td>${generateCellsHTML(window.globalMezclaHTR)}<td class="text-right px-2 font-bold text-orange-900">${formatNumber(htrTotal)}</td></tr><tr class="grand-total-row" style="background-color: #7c2d12;"><td colspan="4" class="text-right pr-4 py-2">TOTAL MEZCLAS (BASE + HTR):</td>${generateCellsHTML(combined)}<td class="text-right px-2 font-bold">${formatNumber(combinedTotal)}</td></tr>`;
 }
 
 function recalcMezclaComponent(groupIndex, compIndex) {
     const group = (window.mezclaGroups || mezclaGroups)[groupIndex];
     if (!group) return;
     // Extract material components exactly like renderMezclasTable (remove trailing pct parentheses first)
+    // IMPORTANT: Preserve type qualifiers like A100, STD, NANO, etc.
     const rawTitle = (group.title || '').toString();
-    const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/,'').trim();
+    const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/, '').trim();
     let titleParts = [];
     if (titleNoPct.indexOf('/') >= 0) {
+        // Split by "/" and preserve full fiber names with qualifiers (e.g., "LYOCELL A100")
         titleParts = titleNoPct.split('/').map(s => s.trim()).filter(Boolean);
     } else {
         // fallback: use same heuristics as renderMezclasTable
