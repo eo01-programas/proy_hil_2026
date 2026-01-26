@@ -58,8 +58,10 @@ function getStrictCanonicalToken(raw) {
 
     // --- OTRAS FIBRAS ---
     // Unificar PES / REPREVE
-    if (u.includes('REPREVE') || u.includes('PES') || u.includes('POLY') || u.includes('RECICLADO')) return 'PES_REPREVE';
+    if (u.includes('REPREVE') || u.includes('PES') || u.includes('RECICLADO')) return 'PES_REPREVE';
     
+    // LYOCELL: Diferenciar A100 de STD/TENCEL
+    if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL_A100';
     if (u.includes('LYOCELL') || u.includes('TENCEL')) return 'LYOCELL';
     if (u.includes('MODAL')) return 'MODAL';
     if (u.includes('VISCOSA') || u.includes('VISCOSE')) return 'VISCOSA';
@@ -175,12 +177,20 @@ let mezclaGroups = [];
 let missingItems = [];
 
 // Vectores globales
-let globalCrudoBase = new Array(12).fill(0);
-let globalCrudoHTR = new Array(12).fill(0);
-let globalCrudoRaw = new Array(12).fill(0);
-let globalMezclaRaw = new Array(12).fill(0);
-let globalMezclaBase = new Array(12).fill(0);
-let globalMezclaHTR = new Array(12).fill(0);
+var globalCrudoBase = new Array(12).fill(0);
+var globalCrudoHTR = new Array(12).fill(0);
+var globalCrudoRaw = new Array(12).fill(0);
+var globalMezclaRaw = new Array(12).fill(0);
+var globalMezclaBase = new Array(12).fill(0);
+var globalMezclaHTR = new Array(12).fill(0);
+
+// Asignar a window para hacerlas globales y accesibles desde otros módulos
+window.globalCrudoBase = globalCrudoBase;
+window.globalCrudoHTR = globalCrudoHTR;
+window.globalCrudoRaw = globalCrudoRaw;
+window.globalMezclaRaw = globalMezclaRaw;
+window.globalMezclaBase = globalMezclaBase;
+window.globalMezclaHTR = globalMezclaHTR;
 
 // Resumen Materiales
 let globalAlgodonQQ = new Array(12).fill(0);
@@ -200,6 +210,130 @@ let DISCREPANCY_ITEMS = [];
 let DISCREPANCY_GROUP_TOTALS = { hasError: false, monthDiffs: [] };
 let HIDDEN_ROWS = new Set();
 let HIDDEN_ROWS_SAMPLES = [];
+
+// === FUNCIÓN PARA DIVIDIR HILADOS MULTI-COMPONENTE ===
+// Divide un hilado como "40/1 PIMA ORG (OCS)/LYOCELL STD/PES PREPREVE (40/30/30%)" 
+// en 3 items separados, cada uno con su porcentaje prorrateado
+function splitMixedYarnByComponents(item) {
+    const yarn = (item.yarn || '').toString();
+    
+    // Patrón: "40/1 PIMA ORG (OCS)/LYOCELL STD/PES PREPREVE (40/30/30%)HTR"
+    // Extraer porcentajes finales: (40/30/30%)
+    const pctMatch = yarn.match(/\(\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*)\s*%?\s*\)/);
+    if (!pctMatch) {
+        return [item]; // Sin porcentajes: no dividir
+    }
+    
+    const pctStr = pctMatch[1];
+    const pcts = pctStr.split('/').map(p => {
+        const v = parseFloat(p.trim());
+        return isNaN(v) ? 0 : (v / 100);
+    });
+    
+    if (pcts.length < 2) {
+        return [item]; // Un solo componente: no dividir
+    }
+    
+    // Extraer yarn antes de los porcentajes
+    const yarnBeforePct = yarn.slice(0, pctMatch.index).trim();
+    
+    // Extraer componentes: "40/1 PIMA ORG (OCS)/LYOCELL STD/PES PREPREVE"
+    let yarnWithComps = yarnBeforePct.replace(/^\d+\/\d+\s+/, '').trim(); // Quitar "40/1 "
+    
+    // Dividir por "/" para obtener componentes
+    const compParts = yarnWithComps.split('/').map(c => c.trim()).filter(c => c.length > 0);
+    
+    // Si no coinciden conteos, intentar heurística por palabras clave
+    if (compParts.length !== pcts.length) {
+        // Lista de keywords para detectar límites de componentes (en mayúsculas)
+        const keywordList = ['LYOCELL','TENCEL','MODAL','VISCOSA','VISCOSE','NYLON','PES','REPREVE','PREPREVE','RECICLADO','RECYCLED','WOOL','MERINO','CAÑAMO','CANAMO','HEMP','ELASTANO','SPANDEX','COTTON','COP','PIMA','ORGANICO','ORG','NC','HTR','STD'];
+        const yarnU = yarnWithComps.toUpperCase();
+        const positions = [];
+        // buscar posiciones de todas las keywords
+        for (const kw of keywordList) {
+            let idx = yarnU.indexOf(kw);
+            while (idx !== -1) {
+                positions.push(idx);
+                idx = yarnU.indexOf(kw, idx + 1);
+            }
+        }
+        // eliminar duplicados y ordenar
+        const uniqPos = Array.from(new Set(positions)).sort((a,b)=>a-b);
+        let derivedParts = null;
+        if (uniqPos.length >= pcts.length && uniqPos.length > 0) {
+            // Usar posiciones para trocear en tantas piezas como porcentajes
+            derivedParts = [];
+            for (let i = 0; i < pcts.length; i++) {
+                const start = uniqPos[i] || 0;
+                const end = uniqPos[i+1] || yarnWithComps.length;
+                const slice = yarnWithComps.substring(start, end).trim();
+                // Asegurar que no cortamos a mitad de palabra: expandir a límites de espacios
+                const left = Math.max(0, start - 20);
+                const right = Math.min(yarnWithComps.length, end + 20);
+                let part = yarnWithComps.substring(start, end).trim();
+                if (!part || part.length === 0) part = yarnWithComps.substring(left, right).trim();
+                derivedParts.push(part.replace(/^[-\/\s]+|[-\/\s]+$/g, '').trim());
+            }
+        } else if (pcts.length === 2) {
+            // heurística simple: dividir en dos usando la primera keyword encontrada
+            const firstKwPos = uniqPos.length>0 ? uniqPos[0] : -1;
+            if (firstKwPos > 3) {
+                const comp1 = yarnWithComps.substring(0, firstKwPos).trim();
+                const comp2 = yarnWithComps.substring(firstKwPos).trim();
+                derivedParts = [comp1, comp2];
+            }
+        }
+
+        if (Array.isArray(derivedParts) && derivedParts.length === pcts.length) {
+            // usar derivedParts en lugar de compParts
+            for (let i=0;i<derivedParts.length;i++) compParts[i] = derivedParts[i];
+        } else {
+            // no pudimos derivar componentes, no dividir
+            return [item];
+        }
+    }
+    
+    // Crear un ítem para cada componente
+    const result = [];
+    compParts.forEach((comp, idx) => {
+        const pct = pcts[idx] || 1;
+        if (pct <= 0) return;
+        
+        const newItem = Object.assign({}, item);
+        // Generar id único para la parte
+        newItem.id = (item.id ? item.id.toString() : 'item') + '_c' + idx + '_' + Math.random().toString(36).slice(2,7);
+        newItem.yarn = comp.trim();
+        newItem.componentPct = pct;
+        newItem.originalYarn = yarn;
+        newItem._isComponentPart = true;
+        // Prorratear valores (vector mensual y kgSol)
+        newItem.values = (item.values || []).map(v => (parseFloat(v) || 0) * pct);
+        newItem.originalValues = (item.originalValues || [...(item.values || [])]).map(v => (parseFloat(v) || 0) * pct);
+        newItem.kgSol = (parseFloat(item.kgSol) || 0) * pct;
+        
+        result.push(newItem);
+    });
+    
+    return result.length > 0 ? result : [item];
+}
+
+// Función wrapper que divide todos los items en GLOBAL_ITEMS
+function applySplitToAllItems() {
+    if (!window.GLOBAL_ITEMS || GLOBAL_ITEMS.length === 0) return;
+    
+    const newItems = [];
+    GLOBAL_ITEMS.forEach(item => {
+        const parts = splitMixedYarnByComponents(item);
+        newItems.push(...parts);
+    });
+    
+    const originalCount = GLOBAL_ITEMS.length;
+    const newCount = newItems.length;
+    if (newCount > originalCount) {
+        console.log(`[COMPONENT SPLIT] Divided ${originalCount} items into ${newCount} parts (${newCount - originalCount} new items from multi-component yarns)`);
+        window.GLOBAL_ITEMS = newItems;
+    }
+}
 
 // --- UI HELPERS ---
 function switchTab(viewId, btnElement) {
@@ -248,7 +382,9 @@ function applyModalMove() {
     if (!groupKey || groupKey === '') { alert('Elige un bloque'); return; }
     if (module === 'CRUDO') { item._forcedClassification = 'CRUDO'; item._forcedGroup = groupKey; }
     else { item._forcedClassification = 'MEZCLA'; item._forcedGroup = groupKey; }
-    closeModal(); recalcAll();
+    applySplitToAllItems();
+    closeModal();
+    recalcAll();
 }
 
 function showDiscrepancyModal(monthIdx) {
@@ -308,6 +444,8 @@ function closeDiscrepancyModal() {
 
 // --- ORQUESTADOR PRINCIPAL (RECALC ALL) ---
 function recalcAll() {
+    // Ensure multi-component yarns are split into component items before any classification
+    try { applySplitToAllItems(); } catch(e) { console.debug('applySplitToAllItems() failed', e); }
     // 1. Resetear estados
     crudoGroups = [];
     mezclaGroups = [];
@@ -322,6 +460,14 @@ function recalcAll() {
     globalMezclaRaw = new Array(12).fill(0);
     globalMezclaBase = new Array(12).fill(0);
     globalMezclaHTR = new Array(12).fill(0);
+    
+    // Actualizar referencias globales de window cuando se reinician
+    window.globalCrudoBase = globalCrudoBase;
+    window.globalCrudoHTR = globalCrudoHTR;
+    window.globalCrudoRaw = globalCrudoRaw;
+    window.globalMezclaRaw = globalMezclaRaw;
+    window.globalMezclaBase = globalMezclaBase;
+    window.globalMezclaHTR = globalMezclaHTR;
     let crudoMap = {};
     let mezclaMap = {};
     let itemAudit = {};
@@ -331,7 +477,8 @@ function recalcAll() {
     // 2. Iterar items
     GLOBAL_ITEMS.forEach(item => {
         const clientCode = (item.client || "").toUpperCase().trim();
-        const isHTRitem = (item.yarn || '').toString().toUpperCase().includes('HTR');
+        const lineaUpper = (item.line || "").toUpperCase().trim();
+        const isHTRitem = lineaUpper === 'HTR';
         const classification = classifyItem(item);
         const shouldGoToCrudos = classification === 'CRUDO';
         const shouldGoToMezclas = classification === 'MEZCLA';
@@ -393,6 +540,23 @@ function recalcAll() {
 
             // 4) What remains is yarnForSignature (will be used as group title)
             let yarnForSignature = yarnStr.trim();
+            
+            // CRITICAL: Clean the yarnForSignature to remove HEATHER, HTR, and other unwanted tokens
+            yarnForSignature = yarnForSignature.replace(/\b(?:HTR|HEATHER)\b/gi, '').trim();
+            // Also remove any nested percentage patterns that shouldn't be part of the title
+            yarnForSignature = yarnForSignature.replace(/\s+\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*/gi, ' ').trim();
+            // Collapse multiple spaces
+            yarnForSignature = yarnForSignature.replace(/\s+/g, ' ').trim();
+            
+            // AGGRESSIVE CLEANING: Keep only words that contain fiber keywords (remove decorative text like "B2NT19 OATMEAL")
+            const fiberKeywords = ['PIMA', 'LYOCELL', 'VISCOSA', 'ALGODON', 'ORG', 'ORGANICO', 'PES', 'POLY', 'POLIESTER', 
+                                    'LANA', 'WOOL', 'NYLON', 'ELASTANO', 'SPANDEX', 'ACRILICO', 'LINO', 'HEMP', 'COP', 
+                                    'REPREVE', 'PREPREVE', 'GOTS', 'TENCEL', 'MODAL', 'BAMBOO'];
+            const cleanParts = yarnForSignature.split(/\s+/).filter(word => {
+                const wordUpper = word.toUpperCase();
+                return fiberKeywords.some(kw => wordUpper.includes(kw)) || /^[\(\[]?\d/.test(word);
+            });
+            yarnForSignature = cleanParts.join(' ').trim();
 
             // 4) Split into component names
             let compNames = getComponentNames(yarnForSignature);
@@ -423,10 +587,13 @@ function recalcAll() {
                 if (item._forcedClassification === 'MEZCLA' && item._forcedGroup) {
                     signature = item._forcedGroup;
                 } else {
-                    // La firma incluye el porcentaje redondeado para diferenciar 50/50 de 75/25
-                    // Build signature based on rounded percentages only (ej. "75/25", "40/30/30")
+                    // Build signature INCLUDING both component tokens AND rounded percentages
+                    // This ensures "PES REPREVE / COP ORGANICO GOTS (65/35%)" groups with same components and pcts
+                    // Format: "TOKEN1_TOKEN2__65/35" (alphabetically sorted by token)
+                    const componentSignature = normComps.map(c => c.token).join('_');
                     const pctRoundedArr = normComps.map(c => Math.round((c.pct || 0) * 100));
-                    signature = pctRoundedArr.join('/');
+                    const pctSignature = pctRoundedArr.join('/');
+                    signature = componentSignature + '__' + pctSignature;
                     if (!signature || signature.trim() === '') signature = '__OTROS_MEZCLAS__';
                 }
 
@@ -442,6 +609,10 @@ function recalcAll() {
                         componentTotalsTotal: {}, 
                         componentPercentages: {} 
                     };
+                    // DEBUG: Log signature creation for PES REPREVE items
+                    if (yarnForSignature.includes('PES') && yarnForSignature.includes('REPREVE')) {
+                        console.log(`📋 NEW MEZCLA GROUP: yarn="${item.yarn}" | cleaned="${yarnForSignature}" | signature="${signature}"`);
+                    }
                 }
 
                 mezclaMap[signature].uniqueYarns.add(item.id);
@@ -499,6 +670,52 @@ function recalcAll() {
     // Ordenar Mezclas Inicial
     mezclaGroups = Object.entries(mezclaMap).map(([key, group]) => ({ key, ...group })).filter(group => group.uniqueYarns.size > 0).sort((a,b) => b.colBases.reduce((s,v)=>s+v,0) - a.colBases.reduce((s,v)=>s+v,0));
 
+    // FUSIÓN MEZCLAS POR TÍTULO: Consolidar grupos con títulos idénticos
+    // Si dos mezclas tienen exactamente el mismo título (después de limpieza), deben fusionarse en un solo grupo
+    const mergedByTitle = {};
+    mezclaGroups.forEach(group => {
+        const titleKey = group.title || 'OTROS (MEZCLAS)';
+        if (!mergedByTitle[titleKey]) {
+            mergedByTitle[titleKey] = {
+                key: group.key,
+                title: group.title,
+                uniqueYarns: new Set(group.uniqueYarns),
+                colBases: [...group.colBases],
+                groupRawTotals: [...group.groupRawTotals],
+                htrColBases: [...group.htrColBases],
+                componentTotalsTotal: { ...group.componentTotalsTotal },
+                componentPercentages: { ...group.componentPercentages }
+            };
+        } else {
+            // Fusionar: sumar colBases, groupRawTotals, etc.
+            group.uniqueYarns.forEach(id => mergedByTitle[titleKey].uniqueYarns.add(id));
+            for (let i = 0; i < 12; i++) {
+                mergedByTitle[titleKey].colBases[i] += group.colBases[i];
+                mergedByTitle[titleKey].groupRawTotals[i] += group.groupRawTotals[i];
+                mergedByTitle[titleKey].htrColBases[i] += group.htrColBases[i];
+            }
+            Object.keys(group.componentTotalsTotal).forEach(token => {
+                if (!mergedByTitle[titleKey].componentTotalsTotal[token]) {
+                    mergedByTitle[titleKey].componentTotalsTotal[token] = [...group.componentTotalsTotal[token]];
+                } else {
+                    for (let i = 0; i < 12; i++) {
+                        mergedByTitle[titleKey].componentTotalsTotal[token][i] += group.componentTotalsTotal[token][i];
+                    }
+                }
+            });
+            Object.keys(group.componentPercentages).forEach(token => {
+                mergedByTitle[titleKey].componentPercentages[token] = group.componentPercentages[token];
+            });
+        }
+    });
+    mezclaGroups = Object.values(mergedByTitle);
+    console.log(`✅ MEZCLA GROUPS MERGED BY TITLE: ${mezclaGroups.length} unique groups`);
+    mezclaGroups.forEach(g => {
+        if (g.title.includes('PES') && g.title.includes('REPREVE')) {
+            console.log(`   ✨ PES REPREVE GROUP: "${g.title}" | Total KG: ${g.groupRawTotals.reduce((s,v)=>s+v,0)}`);
+        }
+    });
+
     // FUSIÓN MEZCLAS (Merge similar blocks)
     // Skip merge/fusion step - keep groups as built (one group per item signature)
     // mezclaGroups = mergeMezclaGroups(mezclaGroups);
@@ -549,14 +766,20 @@ function recalcAll() {
     detailAlgodon = {};
     detailOtras = {};
 
-    ORDERED_COTTON_KEYS.forEach(k => { detailAlgodon[k] = { totalValues: new Array(12).fill(0), clients: {} }; });
-    ORDERED_OTHER_KEYS.forEach(k => { detailOtras[k] = { totalValues: new Array(12).fill(0), clients: {} }; });
+    ORDERED_COTTON_KEYS.forEach(k => { detailAlgodon[k] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] }; });
+    ORDERED_OTHER_KEYS.forEach(k => { detailOtras[k] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] }; });
 
     function defaultMermaForToken(t) {
         const u = (t||'').toString().toUpperCase();
+        // ALGODÓN: 40%
         if (u.includes('PIMA') || u.includes('TANGUIS') || u.includes('ALGODON') || u.includes('UPLAND') || u.includes('COP')) return 40;
+        // Regenerated cellulose (15%): LYOCELL, MODAL, VISCOSA
         if (u.includes('LYOCELL') || u.includes('TENCEL') || u.includes('MODAL') || u.includes('VISCOSA')) return 15;
-        if (u.includes('PES') || u.includes('POLY') || u.includes('REPREVE')) return 15;
+        // Recycled PES (15%): detect REPREVE / PREPREVE (these alone are sufficient)
+        if (u.includes('REPREVE') || u.includes('PREPREVE')) return 15;
+        // Virgin PES (85%): if contains PES but not REPREVE/RECYCLED, then virgin
+        if (u.includes('PES')) return 85;
+        // Everything else (synthetics, natural): 85%
         return 85;
     }
 
@@ -567,25 +790,31 @@ function recalcAll() {
     
     // Mapeo inverso para visualización en Tabla Resumen Materiales
     function getFiberNameFromStrict(strictToken) {
+        // ALGODÓN
         if (strictToken === 'PIMA_ORG_OCS') return 'ALGODÓN PIMA ORGANICO - OCS (QQ)';
         if (strictToken === 'PIMA_ORG_GOTS') return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
         if (strictToken === 'PIMA_NC') return 'ALGODÓN PIMA NC (QQ)';
-        
         if (strictToken === 'TANGUIS_ORG_OCS') return 'ALGODÓN TANGUIS ORGANICO (OCS) (QQ)';
         if (strictToken === 'TANGUIS_ORG_GOTS') return 'ALGODÓN TANGUIS ORGANICO (GOTS) (QQ)';
-        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS NC (QQ)';
-        
+        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS NC BCI (QQ)';
         if (strictToken === 'ALGODON_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
         if (strictToken === 'ALGODON_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (strictToken === 'ALGODON_NC') return 'ALGODÓN UPLAND (QQ)';
         
-        if (strictToken === 'LYOCELL') return 'LYOCELL STD (KG)';
+        // OTRAS FIBRAS - preserve qualifiers like A100, STD, NANO variants
+        if (strictToken === 'LYOCELL_A100') return 'LYOCELL A100 (KG)';
+        if (strictToken === 'LYOCELL_STD' || strictToken === 'LYOCELL') return 'LYOCELL STD (KG)';
         if (strictToken === 'MODAL') return 'MODAL (KG)';
         if (strictToken === 'VISCOSA') return 'VISCOSA (KG)';
-        if (strictToken === 'PES_REPREVE') return 'RECYCLED PES (KG)';
         if (strictToken === 'NYLON') return 'NYLON (KG)';
-        if (strictToken === 'WOOL') return 'WOOL 17.5 (KG)';
-        if (strictToken === 'HEMP') return 'CAÑAMO (KG)';
+        if (strictToken === 'ELASTANO' || strictToken === 'SPANDEX') return 'ELASTANO (KG)';
+        if (strictToken === 'PES_REPREVE' || strictToken === 'PES_RECYCLED') return 'RECYCLED PES (KG)';
+        if (strictToken === 'PES_VIRGIN') return 'PES VIRGEN (KG)';
+        if (strictToken === 'PES') return 'PES VIRGEN (KG)';
+        if (strictToken === 'WOOL' || strictToken === 'MERINO') return 'WOOL 17.5 (KG)';
+        if (strictToken === 'ABETE_NANO_BLANCO') return 'ABETE NANO BLANCO (KG)';
+        if (strictToken === 'ABETE_NANO_MULTI') return 'ABETE NANO 159 MULTICOLO (KG)';
+        if (strictToken === 'HEMP' || strictToken === 'CAÑAMO') return 'CAÑAMO (KG)';
         
         return strictToken;
     }
@@ -593,6 +822,7 @@ function recalcAll() {
     // Lógica para Crudos (Legacy + Compatibilidad)
     function getFiberName(yarn) {
         const u = (yarn||'').toString().toUpperCase();
+        // ALGODÓN
         if (u === 'PIMA_ORG_OCS') return 'ALGODÓN PIMA ORGANICO - OCS (QQ)';
         if (u === 'PIMA_ORG_GOTS') return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
         if (u === 'ALG_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
@@ -601,30 +831,51 @@ function recalcAll() {
         if (u === 'UPLAND_USTCP') return 'ALGODÓN UPLAND USTCP (QQ)';
         if (u.includes('PIMA') && u.includes('ORGANICO')) {
              if(u.includes('GOTS')) return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
-             return 'ALGODÓN PIMA ORGANICO - OCS (QQ)'; // Default OCS si es genérico
+             return 'ALGODÓN PIMA ORGANICO - OCS (QQ)';
         }
         if (u.includes('PIMA')) return 'ALGODÓN PIMA NC (QQ)';
         if (u.includes('TANGUIS')) return 'ALGODÓN TANGUIS (QQ)';
         if (u.includes('UPLAND')) return 'ALGODÓN UPLAND (QQ)';
         if (u.includes('ELEGANT')) return 'ALGODÓN ELEGANT (QQ)';
-        if (u.includes('LYOCELL A100')) return 'LYOCELL A100 (KG)';
-        if (u.includes('LYOCELL')) return 'LYOCELL STD (KG)';
-        if (u.includes('NYLON')) return 'NYLON (KG)';
-        if (u.includes('REPREVE') || (u.includes('PES') && u.includes('RECYCLED'))) return 'RECYCLED PES (KG)';
-        if (u.includes('WOOL')) return 'WOOL 17.5 (KG)';
+        
+        // OTRAS FIBRAS (en orden de ORDERED_OTHER_KEYS)
+        // Regenerated Cellulose - check for A100 qualifier first
+        if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL A100 (KG)';
+        if (u.includes('LYOCELL') || u.includes('TENCEL')) return 'LYOCELL STD (KG)';
         if (u.includes('MODAL')) return 'MODAL (KG)';
+        if (u.includes('VISCOSA') || u.includes('VISCOSE')) return 'VISCOSA (KG)';
+        // Synthetics
+        if (u.includes('NYLON')) return 'NYLON (KG)';
+        if (u.includes('ELASTANO') || u.includes('SPANDEX')) return 'ELASTANO (KG)';
+        // Polyester (differentiate recycled vs virgin)
+        if (u.includes('REPREVE') || u.includes('PREPREVE')) return 'RECYCLED PES (KG)';
+        if (u.includes('PES') && (u.includes('RECYCLED') || u.includes('RECICLADO'))) return 'RECYCLED PES (KG)';
+        if (u.includes('PES')) return 'PES VIRGEN (KG)';
+        // Natural
+        if (u.includes('WOOL') || u.includes('MERINO')) return 'WOOL 17.5 (KG)';
+        if (u.includes('ABETE') && u.includes('BLANCO')) return 'ABETE NANO BLANCO (KG)';
+        if (u.includes('ABETE') && (u.includes('MULTI') || u.includes('MULTICOLOR') || u.includes('MULTICOLO'))) return 'ABETE NANO 159 MULTICOLO (KG)';
+        if (u.includes('ABETE')) return 'ABETE NANO 159 MULTICOLO (KG)'; // Default to multicolor if not specified
+        if (u.includes('CAÑAMO') || u.includes('CANAMO') || u.includes('HEMP')) return 'CAÑAMO (KG)';
+        
         return yarn;
     }
 
     // 3.1 Procesar CRUDOS
     crudoGroups.forEach(g => {
+        const groupTitle = g.title || '';
         g.rows.forEach(row => {
             const isCot = isCottonToken(row.yarn);
             const isOther = !isCot && isOtherFiberToken(row.yarn);
-            const fiberName = getFiberName(row.yarn); 
+            
             if (isCot) {
-                if (!detailAlgodon[fiberName]) detailAlgodon[fiberName] = { totalValues: new Array(12).fill(0), clients: {} };
+                const fiberName = getFiberName(row.yarn);
+                if (!detailAlgodon[fiberName]) detailAlgodon[fiberName] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] };
+                if (!detailAlgodon[fiberName].crudoRows) detailAlgodon[fiberName].crudoRows = [];
                 if (!detailAlgodon[fiberName].clients[row.client]) detailAlgodon[fiberName].clients[row.client] = new Array(12).fill(0);
+                // Agregar el hilado a crudoRows
+                const key = `${groupTitle}||${row.client||''}||${row.line||''}||${row.yarn||''}||${row.id||row.rowIndex||''}`;
+                detailAlgodon[fiberName].crudoRows.push(Object.assign({ key, groupTitle }, row));
                 for (let i=0;i<12;i++) {
                     const raw = row.values[i] || 0;
                     if (Math.abs(raw) < 0.0001) continue;
@@ -634,8 +885,31 @@ function recalcAll() {
                     detailAlgodon[fiberName].totalValues[i] += qq;
                 }
             } else if (isOther) {
-                if (!detailOtras[fiberName]) detailOtras[fiberName] = { totalValues: new Array(12).fill(0), clients: {} };
+                // OTRAS FIBRAS: Evaluar yarn individual para obtener fiberName correcto
+                let fiberName = getFiberName(row.yarn);
+                const yarnU = (row.yarn || '').toString().toUpperCase();
+                
+                // Verificar calificadores específicos
+                if (yarnU.includes('LYOCELL')) {
+                    if (yarnU.includes('A100')) {
+                        fiberName = 'LYOCELL A100 (KG)';
+                    } else {
+                        fiberName = 'LYOCELL STD (KG)';
+                    }
+                } else if (yarnU.includes('ABETE')) {
+                    if (yarnU.includes('BLANCO')) {
+                        fiberName = 'ABETE NANO BLANCO (KG)';
+                    } else if (yarnU.includes('MULTI') || yarnU.includes('MULTICOLOR') || yarnU.includes('MULTICOLO')) {
+                        fiberName = 'ABETE NANO 159 MULTICOLO (KG)';
+                    }
+                }
+                
+                if (!detailOtras[fiberName]) detailOtras[fiberName] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] };
+                if (!detailOtras[fiberName].crudoRows) detailOtras[fiberName].crudoRows = [];
                 if (!detailOtras[fiberName].clients[row.client]) detailOtras[fiberName].clients[row.client] = new Array(12).fill(0);
+                // Agregar el hilado a crudoRows
+                const key = `${groupTitle}||${row.client||''}||${row.line||''}||${row.yarn||''}||${row.id||row.rowIndex||''}`;
+                detailOtras[fiberName].crudoRows.push(Object.assign({ key, groupTitle }, row));
                 for (let i=0;i<12;i++) {
                     const raw = row.values[i] || 0;
                     if (Math.abs(raw) < 0.0001) continue;
@@ -655,48 +929,261 @@ function recalcAll() {
             const vec = compTotals[componentToken];
             if (!vec) return;
             
-            // Determine fiber name: prefer mapping PIMA non-certified explicitly to PIMA NC
+            // Determine fiber name: use strict canonical token first so qualifiers (A100, STD, NANO...) are respected
             const compLabelUpper = (componentToken || '').toString().toUpperCase();
             const isPimaToken = /\bPIMA\b/.test(compLabelUpper);
             const isCertifiedToken = /OCS|GOTS|ORGANICO|ORGANIC|CERT|ORG/.test(compLabelUpper);
+            // Compute strict token from the raw component label
+            let strictToken = componentToken;
+            try { if (typeof getStrictCanonicalToken === 'function') strictToken = getStrictCanonicalToken(componentToken || ''); } catch(e) { strictToken = componentToken; }
             let fiberName;
             if (isPimaToken && !isCertifiedToken) {
                 fiberName = 'ALGODÓN PIMA NC (QQ)';
             } else {
-                // Usamos la nueva función para obtener el nombre legible desde el token estricto
-                fiberName = getFiberNameFromStrict(componentToken);
+                // Map from strict token to display name (this preserves qualifiers like A100)
+                try { fiberName = (typeof getFiberNameFromStrict === 'function') ? getFiberNameFromStrict(strictToken) : getFiberName(strictToken); } catch(e) { fiberName = getFiberName(strictToken); }
             }
-            
+
+            const groupTitle = g.title || '';
             const client = g.uniqueYarns.size > 0 ? (Array.from(g.uniqueYarns).map(id => GLOBAL_ITEMS.find(x => x.id === id)).filter(x => x)[0]?.client || 'VARIOS') : 'VARIOS';
-            const isCotton = componentToken.includes('PIMA') || componentToken.includes('TANGUIS') || componentToken.includes('ALGODON');
+            // Decide si es algodón comprobando el token estricto (más fiable que el texto bruto)
+            const isCotton = (typeof strictToken === 'string' && /PIMA|TANGUIS|ALGODON|UPLAND|COP/.test(strictToken.toUpperCase())) || /PIMA|TANGUIS|ALGODON|UPLAND|COP/.test(compLabelUpper);
+            
+            // Extraer los items individuales de uniqueYarns para mezclaItems
+            const mezclaItemsToAdd = [];
+            const compPctMap = g.componentPercentages || {};
+            function extractPctFromYarn_local(yarn) {
+                try {
+                    if (!yarn) return null;
+                    const s = yarn.toString();
+                    // Regex mejorado: captura "65/35 %" o "65/35%" o "(65/35%)" con espacios opcionales
+                    const m = s.match(/(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s*%/);
+                    if (!m) return null;
+                    const pctBlock = m[1].trim(); // grupo 1 sin el %
+                    const parts = pctBlock.split('/').map(p => { const v = parseFloat(p.trim()); return isNaN(v) ? null : v/100; }).filter(x => x !== null);
+                    return (parts && parts.length > 0) ? parts : null;
+                } catch(e) { return null; }
+            }
+
+            if (g.uniqueYarns && g.uniqueYarns.size > 0) {
+                Array.from(g.uniqueYarns).forEach(id => {
+                    try {
+                        const itSrc = GLOBAL_ITEMS.find(x => x.id === id);
+                        if (!itSrc || !itSrc.yarn) return;
+                        const it = Object.assign({ groupTitle }, itSrc);
+
+                        // Determine pct: ESTRATEGIA DIRECTA - Extraer componentes por orden posicional desde el yarn
+                        let pct = null;
+                        let actualComponentName = componentToken; // Nombre real extraído del yarn
+                        
+                        try {
+                            const pctList = extractPctFromYarn_local(it.yarn);
+                            if (Array.isArray(pctList) && pctList.length > 0) {
+                                // Extraer componentes en orden posicional (sin el bloque de %)
+                                let yarnStr = it.yarn.toString();
+                                yarnStr = yarnStr.replace(/^\s*\d+\/\d+\s*/,'').trim(); // quitar "40/1 "
+                                yarnStr = yarnStr.replace(/\s*\(?\d+(?:\/\d+)*%?\)?\s*$/,'').trim(); // quitar "(75/25%)" al final
+                                yarnStr = yarnStr.replace(/\s*(HTR|NC|STD)\s*$/i, '').trim(); // quitar sufijos al final
+                                
+                                // Dividir por "/" pero solo si hay "/" que separe componentes reales
+                                let comps = yarnStr.split('/').map(c => c.trim()).filter(c => c.length > 0);
+                                
+                                // CASO ESPECIAL: Si comps.length != pctList.length, el hilado puede no usar "/" como separador
+                                // Ejemplo: "COP PIMA NC TENCEL STD" con (75/25%) => 2 componentes sin "/"
+                                // Debemos usar keywords para extraer componentes
+                                if (comps.length !== pctList.length && pctList.length >= 2) {
+                                    // Analizar yarnStr para extraer componentes por keyword boundaries
+                                    const fiberBoundaries = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'NYLON', 'PES', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ABETE', 'CAÑAMO', 'CANAMO', 'ELASTANO'];
+                                    const yarnU = yarnStr.toUpperCase();
+                                    
+                                    // Buscar donde comienza el segundo componente
+                                    let splitPos = -1;
+                                    for (const fb of fiberBoundaries) {
+                                        const idx = yarnU.indexOf(fb);
+                                        // Solo si no está al inicio (el primer componente podría empezar con una keyword de algodón)
+                                        if (idx > 3) { // al menos 3 caracteres antes
+                                            if (splitPos === -1 || idx < splitPos) {
+                                                splitPos = idx;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if (splitPos > 0) {
+                                        // Dividir en 2 componentes
+                                        const comp1 = yarnStr.substring(0, splitPos).trim();
+                                        const comp2 = yarnStr.substring(splitPos).trim();
+                                        comps = [comp1, comp2];
+                                    }
+                                }
+
+                                // Keywords para identificar tipo de fibra
+                                const fiberKeywords = {
+                                    'PIMA': ['PIMA'],
+                                    'TANGUIS': ['TANGUIS'],
+                                    'ALGODON': ['ALGODON', 'COTTON', 'COP'],
+                                    'LYOCELL': ['LYOCELL', 'TENCEL'],
+                                    'MODAL': ['MODAL'],
+                                    'VISCOSA': ['VISCOSA', 'VISCOSE', 'RAYON'],
+                                    'NYLON': ['NYLON'],
+                                    'PES': ['PES', 'REPREVE', 'RECYCLED'],
+                                    'WOOL': ['WOOL', 'MERINO'],
+                                    'ABETE': ['ABETE'],
+                                    'CAÑAMO': ['CAÑAMO', 'CANAMO', 'HEMP'],
+                                    'ELASTANO': ['ELASTANO', 'SPANDEX']
+                                };
+
+                                // Determinar qué fibra esperar según componentToken
+                                const tokenU = (componentToken || '').toString().toUpperCase();
+                                let expectedFiberType = null;
+                                
+                                // Primero buscar en tipos más específicos (LYOCELL antes de ALGODON)
+                                const orderedTypes = ['LYOCELL', 'MODAL', 'VISCOSA', 'NYLON', 'PES', 'WOOL', 'ABETE', 'CAÑAMO', 'ELASTANO', 'PIMA', 'TANGUIS', 'ALGODON'];
+                                for (let fType of orderedTypes) {
+                                    const keywords = fiberKeywords[fType];
+                                    for (let kw of keywords) {
+                                        if (tokenU.includes(kw)) {
+                                            expectedFiberType = fType;
+                                            break;
+                                        }
+                                    }
+                                    if (expectedFiberType) break;
+                                }
+
+                                // Buscar el componente que coincide con expectedFiberType
+                                let compIndex = -1;
+                                if (expectedFiberType) {
+                                    const keywords = fiberKeywords[expectedFiberType];
+                                    for (let ci = 0; ci < comps.length; ci++) {
+                                        const compU = comps[ci].toUpperCase();
+                                        for (let kw of keywords) {
+                                            if (compU.includes(kw)) {
+                                                compIndex = ci;
+                                                actualComponentName = comps[ci];
+                                                break;
+                                            }
+                                        }
+                                        if (compIndex !== -1) break;
+                                    }
+                                }
+                                
+                                // Fallback: si no hay match y los conteos coinciden, usar posición 0
+                                if (compIndex === -1 && comps.length === pctList.length) {
+                                    compIndex = 0;
+                                    actualComponentName = comps[0];
+                                }
+
+                                // Asignar el porcentaje por índice posicional
+                                if (compIndex >= 0 && compIndex < pctList.length) {
+                                    pct = pctList[compIndex];
+                                }
+                            }
+                        } catch (e) { /* ignore parse failures */ }
+
+                        // Normalizar pct a fracción (si viene como porcentaje como 30 -> 0.3)
+                        if (pct !== null && pct > 1) pct = pct / 100;
+
+                        it.pct = pct; // may be null
+                        it.actualComponentName = actualComponentName; // Guardar nombre real para clasificación
+                        mezclaItemsToAdd.push(it);
+                    } catch (e) {}
+                });
+            }
             
             if (isCotton) {
                 const merma = 40;
                 // Inicializar si no existe
-                if (!detailAlgodon[fiberName]) detailAlgodon[fiberName] = { totalValues: new Array(12).fill(0), clients: {} };
+                if (!detailAlgodon[fiberName]) detailAlgodon[fiberName] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] };
+                if (!detailAlgodon[fiberName].mezclaItems) detailAlgodon[fiberName].mezclaItems = [];
                 if (!detailAlgodon[fiberName].clients[client]) detailAlgodon[fiberName].clients[client] = new Array(12).fill(0);
                 
+                // Agregar mezclaItems
+                mezclaItemsToAdd.forEach(it => {
+                    if (!detailAlgodon[fiberName].mezclaItems.some(x => x.id === it.id)) {
+                        detailAlgodon[fiberName].mezclaItems.push(it);
+                    }
+                });
+                
+                // Calcular QQ POR ITEM (aplicando pct) en lugar de usar vec[i] agregado
                 for (let i=0;i<12;i++) {
-                    const base = vec[i] || 0;
-                    if (Math.abs(base) < 0.0001) continue;
-                    const req = base / (1 - merma/100);
-                    const qq = req / 46;
-                    detailAlgodon[fiberName].clients[client][i] += qq;
-                    detailAlgodon[fiberName].totalValues[i] += qq;
+                    let monthQQ = 0;
+                    mezclaItemsToAdd.forEach(it => {
+                        try {
+                            const raw = parseFloat(it.values && it.values[i] ? it.values[i] : 0) || 0;
+                            if (Math.abs(raw) < 0.0001) return;
+                            // Aplicar pct si existe
+                            const pct = (it.pct !== null && typeof it.pct === 'number' && it.pct > 0) ? it.pct : 1;
+                            const componentRaw = raw * pct;
+                            const kgReq = componentRaw / (1 - merma/100);
+                            const qq = kgReq / 46;
+                            monthQQ += qq;
+                        } catch(e) { }
+                    });
+                    if (monthQQ > 0.0001) {
+                        detailAlgodon[fiberName].clients[client][i] += monthQQ;
+                        detailAlgodon[fiberName].totalValues[i] += monthQQ;
+                    }
                 }
             } else {
-                const merma = defaultMermaForToken(componentToken);
-                // Inicializar si no existe
-                if (!detailOtras[fiberName]) detailOtras[fiberName] = { totalValues: new Array(12).fill(0), clients: {} };
-                if (!detailOtras[fiberName].clients[client]) detailOtras[fiberName].clients[client] = new Array(12).fill(0);
-                
-                for (let i=0;i<12;i++) {
-                    const base = vec[i] || 0;
-                    if (Math.abs(base) < 0.0001) continue;
-                    const req = base / (1 - merma/100);
-                    detailOtras[fiberName].clients[client][i] += req;
-                    detailOtras[fiberName].totalValues[i] += req;
-                }
+                // OTRAS FIBRAS: Procesar cada item usando el nombre real del componente extraído del yarn
+                mezclaItemsToAdd.forEach(it => {
+                    try {
+                        // Usar actualComponentName (extraído del yarn) para determinar fiberName correcto
+                        const realCompName = it.actualComponentName || componentToken;
+                        const realCompUpper = (realCompName || '').toString().toUpperCase();
+                        
+                        // Determinar fiberName basado en el nombre REAL del componente
+                        let itemFiberName = fiberName; // Default
+                        if (realCompUpper.includes('LYOCELL') || realCompUpper.includes('TENCEL')) {
+                            if (realCompUpper.includes('A100')) {
+                                itemFiberName = 'LYOCELL A100 (KG)';
+                            } else {
+                                itemFiberName = 'LYOCELL STD (KG)';
+                            }
+                        } else if (realCompUpper.includes('ABETE')) {
+                            if (realCompUpper.includes('BLANCO')) {
+                                itemFiberName = 'ABETE NANO BLANCO (KG)';
+                            } else {
+                                itemFiberName = 'ABETE NANO 159 MULTICOLO (KG)';
+                            }
+                        } else if (realCompUpper.includes('CAÑAMO') || realCompUpper.includes('CANAMO') || realCompUpper.includes('HEMP')) {
+                            itemFiberName = 'CAÑAMO (KG)';
+                        } else if (realCompUpper.includes('WOOL') || realCompUpper.includes('MERINO')) {
+                            itemFiberName = 'WOOL 17.5 (KG)';
+                        } else if (realCompUpper.includes('NYLON')) {
+                            itemFiberName = 'NYLON (KG)';
+                        } else if (realCompUpper.includes('MODAL')) {
+                            itemFiberName = 'MODAL (KG)';
+                        } else if (realCompUpper.includes('REPREVE') || realCompUpper.includes('PREPREVE') || (realCompUpper.includes('PES') && (realCompUpper.includes('RECYCLED') || realCompUpper.includes('RECICLADO')))) {
+                            itemFiberName = 'RECYCLED PES (KG)';
+                        }
+                        
+                        const merma = defaultMermaForToken(realCompName);
+                        const itemClient = it.client || client;
+                        
+                        // Inicializar si no existe
+                        if (!detailOtras[itemFiberName]) detailOtras[itemFiberName] = { totalValues: new Array(12).fill(0), clients: {}, crudoRows: [], mezclaItems: [] };
+                        if (!detailOtras[itemFiberName].mezclaItems) detailOtras[itemFiberName].mezclaItems = [];
+                        if (!detailOtras[itemFiberName].clients[itemClient]) detailOtras[itemFiberName].clients[itemClient] = new Array(12).fill(0);
+                        
+                        // Agregar mezclaItem (evitar duplicados)
+                        if (!detailOtras[itemFiberName].mezclaItems.some(x => x.id === it.id)) {
+                            detailOtras[itemFiberName].mezclaItems.push(it);
+                        }
+                        
+                        // Calcular KgReq POR ITEM (SIN QQ - QQ solo para algodón)
+                        for (let i=0;i<12;i++) {
+                            try {
+                                const raw = parseFloat(it.values && it.values[i] ? it.values[i] : 0) || 0;
+                                if (Math.abs(raw) < 0.0001) continue;
+                                const pct = (it.pct !== null && typeof it.pct === 'number' && it.pct > 0) ? it.pct : 1;
+                                const componentRaw = raw * pct;
+                                const req = componentRaw / (1 - merma/100);
+                                detailOtras[itemFiberName].clients[itemClient][i] += req;
+                                detailOtras[itemFiberName].totalValues[i] += req;
+                            } catch(e) { }
+                        }
+                    } catch(e) { }
+                });
             }
         });
     });
