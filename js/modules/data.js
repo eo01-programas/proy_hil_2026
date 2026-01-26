@@ -105,6 +105,7 @@ function processFile() {
             console.log('excelGroupTotals capturado:', excelGroupTotals);
             console.log('grandTotalVector calculado:', grandTotalVector);
 
+            applySplitToAllItems();
             recalcAll();
 
             const _tabContainer = document.getElementById('tabContainer');
@@ -164,6 +165,7 @@ async function processArrayBuffer(buffer) {
         console.log('excelGroupTotals capturado:', excelGroupTotals);
         console.log('grandTotalVector calculado:', grandTotalVector);
 
+        applySplitToAllItems();
         recalcAll();
 
         const _tabContainer = document.getElementById('tabContainer');
