@@ -6,10 +6,16 @@ function renderCrudosTable() {
     const tbody = document.getElementById('crudosBody'); tbody.innerHTML = ''; 
     
     crudoGroups.forEach((group, groupIndex) => { 
-        // Excluir filas de comentario/agrupación (CLIENTE(S) VARIOS, PROYECCIÓN, RESERVA)
+        // Build a fast lookup of rowIndex present in GLOBAL_ITEMS (data.js produces the canonical list)
+        const allowedRowIndices = new Set((GLOBAL_ITEMS || []).map(it => it.rowIndex).filter(i => i !== undefined));
+        // Excluir filas de comentario/agrupación y también filas que NO están entre los items cargados por data.js
         const filteredRows = (group.rows || []).filter(r => {
             const txt = ((r.line||'') + '|' + (r.client||'') + '|' + (r.yarn||'')).toString().toUpperCase();
-            return !(txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+            const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+            if (isComment) return false;
+            if (typeof r.rowIndex !== 'undefined') return allowedRowIndices.has(r.rowIndex);
+            // fallback: match by triple key (line|client|yarn) against GLOBAL_ITEMS
+            return (GLOBAL_ITEMS || []).some(it => (it.line||'') === (r.line||'') && (it.client||'') === (r.client||'') && (it.yarn||'') === (r.yarn||''));
         });
         // totales por columna usando solo filas válidas
         const filteredTotals = activeIndices.map((_, pos) => filteredRows.reduce((s, r) => s + ((r.values && r.values[activeIndices[pos]]) || 0), 0));
@@ -61,11 +67,11 @@ function renderCrudosTable() {
         tbody.innerHTML += `<tr><td colspan="${4+activeIndices.length+1}" class="h-4 border-none"></td></tr>`; 
     });
     
-    const baseTotal = (globalCrudoBase || []).reduce((a,b)=>a+(b||0),0);
-    const htrTotal = (globalCrudoHTR || []).reduce((a,b)=>a+(b||0),0);
-    const combined = (globalCrudoBase || []).map((v,i) => (v||0) + (globalCrudoHTR||[])[i] || 0);
+    const baseTotal = (window.globalCrudoBase || []).reduce((a,b)=>a+(b||0),0);
+    const htrTotal = (window.globalCrudoHTR || []).reduce((a,b)=>a+(b||0),0);
+    const combined = (window.globalCrudoBase || []).map((v,i) => (v||0) + (window.globalCrudoHTR||[])[i] || 0);
     const combinedTotal = combined.reduce((a,b)=>a+(b||0),0);
-    document.getElementById('crudosFooter').innerHTML = `<tr class="bg-emerald-100 font-bold border-t-2 border-emerald-500"><td colspan="4" class="text-right pr-4 py-2 text-emerald-900">SUMA CRUDO (BASE):</td>${generateCellsHTML(globalCrudoBase)}<td class="text-right px-2 font-bold text-emerald-900">${formatNumber(baseTotal)}</td></tr><tr class="bg-emerald-100 font-bold"><td colspan="4" class="text-right pr-4 py-2 text-emerald-900">SUMA HTR:</td>${generateCellsHTML(globalCrudoHTR)}<td class="text-right px-2 font-bold text-emerald-900">${formatNumber(htrTotal)}</td></tr><tr class="grand-total-row"><td colspan="4" class="text-right pr-4 py-2">TOTAL CRUDOS (BASE + HTR):</td>${generateCellsHTML(combined)}<td class="text-right px-2 font-bold">${formatNumber(combinedTotal)}</td></tr>`;
+    document.getElementById('crudosFooter').innerHTML = `<tr class="bg-emerald-100 font-bold border-t-2 border-emerald-500"><td colspan="4" class="text-right pr-4 py-2 text-emerald-900">SUMA CRUDO (BASE):</td>${generateCellsHTML(window.globalCrudoBase)}<td class="text-right px-2 font-bold text-emerald-900">${formatNumber(baseTotal)}</td></tr><tr class="bg-emerald-100 font-bold"><td colspan="4" class="text-right pr-4 py-2 text-emerald-900">SUMA HTR:</td>${generateCellsHTML(window.globalCrudoHTR)}<td class="text-right px-2 font-bold text-emerald-900">${formatNumber(htrTotal)}</td></tr><tr class="grand-total-row"><td colspan="4" class="text-right pr-4 py-2">TOTAL CRUDOS (BASE + HTR):</td>${generateCellsHTML(combined)}<td class="text-right px-2 font-bold">${formatNumber(combinedTotal)}</td></tr>`;
 }
 
 function recalcCrudoGroup(groupIndex) {
@@ -77,10 +83,14 @@ function recalcCrudoGroup(groupIndex) {
     const group = (typeof crudoGroups !== 'undefined' && Array.isArray(crudoGroups)) ? crudoGroups[groupIndex] : null;
     if (!group) return;
 
-    // Recompute filtered totals excluding comment rows
+    // Recompute filtered totals excluding comment rows and rows not present in GLOBAL_ITEMS
+    const allowedRowIndices = new Set((GLOBAL_ITEMS || []).map(it => it.rowIndex).filter(i => i !== undefined));
     const filteredRows = (group.rows || []).filter(r => {
         const txt = ((r.line||'') + '|' + (r.client||'') + '|' + (r.yarn||'')).toString().toUpperCase();
-        return !(txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+        const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+        if (isComment) return false;
+        if (typeof r.rowIndex !== 'undefined') return allowedRowIndices.has(r.rowIndex);
+        return (GLOBAL_ITEMS || []).some(it => (it.line||'') === (r.line||'') && (it.client||'') === (r.client||'') && (it.yarn||'') === (r.yarn||''));
     });
     const filteredTotals = activeIndices.map((_, pos) => filteredRows.reduce((s, r) => s + ((r.values && r.values[activeIndices[pos]]) || 0), 0));
 
