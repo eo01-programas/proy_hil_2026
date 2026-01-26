@@ -310,14 +310,25 @@ function classifyItem(item) {
     return 'CRUDO';
 }
 
-function generateCellsHTML(values, isHeader = false, customClass = '') {
+function generateCellsHTML(values, isHeader = false, customClass = '', includeTotal = false) {
     if (!Array.isArray(activeIndices)) return '';
-    return activeIndices.map(idx => {
+    let html = activeIndices.map(idx => {
         if (isHeader) return `<th class="text-right px-2 py-1 w-14 ${customClass}">${MONTH_NAMES[idx]}</th>`;
         const cls = customClass || formatCellClass(values ? values[idx] : 0);
         const val = values && typeof values[idx] !== 'undefined' ? values[idx] : 0;
         return `<td class="text-right px-2 border-l border-gray-100 ${cls}">${formatNumber(val)}</td>`;
     }).join('');
+
+    if (includeTotal) {
+        if (isHeader) {
+            html += `<th class="text-right px-2 py-1 w-20">TOTAL</th>`;
+        } else {
+            const total = (Array.isArray(values) && values.length > 0) ? activeIndices.reduce((s, idx) => s + (parseFloat(values[idx] || 0) || 0), 0) : 0;
+            const cls = formatCellClass(total);
+            html += `<td class="text-right px-2 border-l border-gray-100 ${cls}">${formatNumber(total)}</td>`;
+        }
+    }
+    return html;
 }
 
 function getCrudoGroupKey(yarnName, clientName = "") {
