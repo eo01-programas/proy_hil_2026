@@ -118,30 +118,27 @@ function generateId() { return 'row_' + Math.random().toString(36).substr(2, 9);
 
 function formatNumber(num) {
     var n = parseLocaleNumber(num);
-    if (!isFinite(n) || Math.abs(n) < 0.0000001) return '-';
+    if (!isFinite(n)) return '-';
+    if (Math.abs(n) < 0.0000001) return '0';
 
-    // Preserve decimals only when needed (up to 2), trim trailing zeros
-    var hasDecimals = Math.round(n) !== n;
-    var fixed = hasDecimals ? n.toFixed(2) : Math.round(n).toString();
-    if (hasDecimals) {
-        fixed = fixed.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-        if (fixed === '-0') return '-';
-    }
+    // Mostrar siempre 0 decimales. Si es 0.x, mantener en 0 (no redondear a 1).
+    var rounded = Math.abs(n) < 1 ? 0 : Math.round(n);
+    if (Object.is(rounded, -0)) rounded = 0;
+    if (rounded === 0) return '0';
 
     // Prefer native locale if available, fallback to manual grouping
     try {
-        var localeFormatted = Number(fixed).toLocaleString('en-US');
+        var localeFormatted = Number(rounded).toLocaleString('en-US');
         if (localeFormatted && /^[0-9,\.\s\-]+$/.test(localeFormatted)) {
             return localeFormatted;
         }
     } catch (e) { /* fallback below */ }
 
-    var parts = fixed.split('.');
-    var intPart = parts[0];
+    var intPart = String(rounded);
     var sign = '';
     if (intPart.charAt(0) === '-') { sign = '-'; intPart = intPart.slice(1); }
     intPart = String(intPart).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return sign + intPart + (parts[1] ? '.' + parts[1] : '');
+    return sign + intPart;
 }
 
 function formatCellClass(num) {
