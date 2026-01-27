@@ -14,7 +14,7 @@ function getStrictCanonicalToken(raw) {
     let u = raw.toString().toUpperCase();
     
     // 1. Limpieza básica
-    u = u.normalize('NFD').replace(/\p{Diacritic}/gu,'');
+    u = stripDiacritics(u);
     
     // 2. ELIMINAR RUIDO QUE NO AFECTA LA IDENTIDAD
     u = u.replace(/\bCOP\b/g, ''); // "COP PIMA" es igual a "PIMA"
@@ -945,7 +945,16 @@ function recalcAll() {
             }
 
             const groupTitle = g.title || '';
-            const client = g.uniqueYarns.size > 0 ? (Array.from(g.uniqueYarns).map(id => GLOBAL_ITEMS.find(x => x.id === id)).filter(x => x)[0]?.client || 'VARIOS') : 'VARIOS';
+            let client = 'VARIOS';
+            if (g.uniqueYarns && g.uniqueYarns.size > 0) {
+                const ids = Array.from(g.uniqueYarns);
+                let firstItem = null;
+                for (let i = 0; i < ids.length; i++) {
+                    const candidate = GLOBAL_ITEMS.find(x => x.id === ids[i]);
+                    if (candidate) { firstItem = candidate; break; }
+                }
+                if (firstItem && firstItem.client) client = firstItem.client;
+            }
             // Decide si es algodón comprobando el token estricto (más fiable que el texto bruto)
             const isCotton = (typeof strictToken === 'string' && /PIMA|TANGUIS|ALGODON|UPLAND|COP/.test(strictToken.toUpperCase())) || /PIMA|TANGUIS|ALGODON|UPLAND|COP/.test(compLabelUpper);
             
