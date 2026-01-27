@@ -126,18 +126,13 @@ function formatNumber(num) {
     if (Object.is(rounded, -0)) rounded = 0;
     if (rounded === 0) return '0';
 
-    // Prefer native locale if available, fallback to manual grouping
-    try {
-        var localeFormatted = Number(rounded).toLocaleString('en-US');
-        if (localeFormatted && /^[0-9,\.\s\-]+$/.test(localeFormatted)) {
-            return localeFormatted;
-        }
-    } catch (e) { /* fallback below */ }
-
+    // Formato con una sola coma (máximo) y sin puntos
     var intPart = String(rounded);
     var sign = '';
     if (intPart.charAt(0) === '-') { sign = '-'; intPart = intPart.slice(1); }
-    intPart = String(intPart).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (intPart.length > 3) {
+        intPart = intPart.slice(0, -3) + ',' + intPart.slice(-3);
+    }
     return sign + intPart;
 }
 
