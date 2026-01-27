@@ -1,5 +1,10 @@
 /* Extraído de proyeccion.html */
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; user-select: none; }
+body { 
+    font-family: Helvetica, Arial, 'Segoe UI', Verdana, sans-serif; 
+    background-color: #f1f5f9; 
+    user-select: none; 
+    -webkit-text-size-adjust: 100%;
+}
 
 .table-wrapper { 
     overflow-x: auto; 
@@ -14,6 +19,19 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-
 thead { position: sticky; top: 0; z-index: 50; }
 td { font-size: 0.75rem; white-space: nowrap; padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; }
 th { white-space: nowrap; font-size: 0.75rem; }
+
+/* Evitar negrita en datos (solo mantenerla en filas de totales/encabezados de grupo) */
+.table-wrapper tbody tr:not(.group-header):not(.row-group-total):not(.row-req):not(.row-qq):not(.grand-total-row):not(.error-total-row) td {
+    font-weight: 400;
+}
+.table-wrapper tbody tr.group-header td { font-weight: 800; }
+.table-wrapper tbody tr.row-group-total td,
+.table-wrapper tbody tr.row-req td,
+.table-wrapper tbody tr.row-qq td,
+.table-wrapper tbody tr.grand-total-row td,
+.table-wrapper tfoot td {
+    font-weight: 700;
+}
 
 /* Estilos de Cabeceras */
 .mat-header-top { background-color: #064e3b; color: white; text-transform: uppercase; letter-spacing: 1px; font-size: 0.7rem; border-bottom: 1px solid #065f46; }
@@ -31,29 +49,29 @@ th { white-space: nowrap; font-size: 0.75rem; }
 .group-header { background-color: #e2e8f0; color: #1e293b; font-weight: 800; font-size: 0.75rem; border-top: 1px solid #94a3b8; border-bottom: 1px solid #cbd5e1; cursor: default; }
 
 /* Total row styles */
-.row-group-total td { background-color: #f1f5f9; font-weight: 800; border-top: 2px solid #94a3b8; border-bottom: 1px solid #cbd5e1; color: #1e293b; }
-.row-req td { background-color: #f0fdf4; font-weight: 700; color: #166534; border-top: 2px solid #86efac; }
-.row-qq td { background-color: #ecfdf5; font-weight: 700; color: #047857; border-bottom: 2px solid #059669; }
+.row-group-total td { background-color: #f1f5f9; border-top: 2px solid #94a3b8; border-bottom: 1px solid #cbd5e1; color: #1e293b; }
+.row-req td { background-color: #f0fdf4; color: #166534; border-top: 2px solid #86efac; }
+.row-qq td { background-color: #ecfdf5; color: #047857; border-bottom: 2px solid #059669; }
 
 .merma-input { 
     width: 36px; padding: 1px; text-align: center; border: 1px solid #f59e0b; border-radius: 3px; 
-    font-weight: bold; color: #b45309; background: #fffbeb; font-size: 0.7rem; margin: 0 4px;
+    color: #b45309; background: #fffbeb; font-size: 0.7rem; margin: 0 4px;
 }
 .merma-input:focus { outline: none; border-color: #d97706; background: white; }
 
 .text-num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
-.negative-val { color: #dc2626; font-weight: bold; }
+.negative-val { color: #dc2626; }
 .zero-val { color: #cbd5e1; }
 
 tfoot { background-color: #f8fafc; border-top: 2px solid #e2e8f0; }
-.grand-total-row td { background-color: #1f2937; color: #f3f4f6; font-weight: bold; border-top: 3px solid #fbbf24; font-size: 0.8rem; }
+.grand-total-row td { background-color: #1f2937; color: #f3f4f6; border-top: 3px solid #fbbf24; font-size: 0.8rem; }
 
 .tab-btn { padding: 0.75rem 1.2rem; font-weight: 700; font-size: 0.75rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; transition: all 0.2s; }
 .tab-active { background-color: white; color: #0f172a; border-top: 3px solid #2563eb; box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05); }
 .tab-inactive { background-color: #e2e8f0; color: #64748b; border-top: 3px solid transparent; }
 .tab-inactive:hover { background-color: #cbd5e1; }
 .cell-truncate { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.total-col { background-color: #f1f5f9; font-weight: bold; border-left: 2px solid #cbd5e1; }
+.total-col { background-color: #f1f5f9; border-left: 2px solid #cbd5e1; }
 
 .add-row-btn {
     background-color: #f0fdf4; color: #166534; border: 1px dashed #166534;
@@ -66,5 +84,25 @@ tfoot { background-color: #f8fafc; border-top: 2px solid #e2e8f0; }
 /* Nuevos estilos para errores */
 .error-row { background-color: #fef3c7 !important; border-left: 4px solid #d97706; }
 .error-total-row { background-color: #fef3c7 !important; border: 2px solid #dc2626 !important; }
-.error-cell { background-color: #fca5a5 !important; font-weight: bold; color: #7f1d1d !important; }
+.error-cell { background-color: #fca5a5 !important; color: #7f1d1d !important; }
 .error-badge { background-color: #dc2626; color: white; padding: 1px 4px; border-radius: 3px; font-size: 0.6rem; margin-left: 4px; }
+
+/* Modal detalle de fibra */
+.fiber-modal-panel { max-width: 90vw; max-height: 80vh; }
+.fiber-cell-btn {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.fiber-cell-btn:hover { text-decoration: underline; }
+.fiber-detail-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: #f8fafc;
+}
+.fiber-detail-item > summary { cursor: pointer; font-weight: 600; color: #0f172a; }
+.fiber-detail-item-body { margin-top: 6px; font-size: 0.75rem; color: #334155; }
