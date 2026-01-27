@@ -20,7 +20,7 @@ function renderCrudosTable() {
         // totales por columna usando solo filas válidas
         const filteredTotals = activeIndices.map((_, pos) => filteredRows.reduce((s, r) => s + ((r.values && r.values[activeIndices[pos]]) || 0), 0));
         if (Math.abs(filteredTotals.reduce((a,b)=>a+b,0)) <= 0.01) return; 
-        tbody.innerHTML += `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}</td></tr>`; 
+        tbody.innerHTML += `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}</td></tr>`; 
         
         filteredRows.forEach(row => { 
             const moveControls = renderMoveControls(row, 'CRUDO');
