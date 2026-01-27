@@ -107,30 +107,7 @@ function processFile() {
 
             applySplitToAllItems();
             recalcAll();
-
-            const _tabContainer = document.getElementById('tabContainer');
-            if (_tabContainer) _tabContainer.classList.remove('hidden');
-            const _detailView = document.getElementById('detailView');
-            if (_detailView) _detailView.classList.remove('hidden');
-            const _btnExport = document.getElementById('btnExport');
-            if (_btnExport) _btnExport.classList.remove('hidden');
-            const _debugContainer = document.getElementById('debugContainer');
-            if (_debugContainer) _debugContainer.classList.remove('hidden');
-
-            const grandSum = grandTotalVector.reduce((a,b) => a+b, 0);
-            const excelGroupSum = (excelGroupTotals && Array.isArray(excelGroupTotals)) ? excelGroupTotals.reduce((a,b) => a+b, 0) : 0;
-            const itemsWithExcelTotal = GLOBAL_ITEMS.filter(it => (it.excelTotal || 0) > 0);
-
-            let debugHtml = '';
-            debugHtml += `<span class="font-medium">Items cargados: ${GLOBAL_ITEMS.length}</span> · `;
-            debugHtml += `<span class="font-medium">Suma calculada total: ${formatNumber(grandSum)} Kg</span>`;
-            if (excelGroupTotals) debugHtml += ` · <span class="font-medium">Excel DETALLE TOTAL GRUPOS: ${formatNumber(excelGroupSum)} Kg</span>`;
-            debugHtml += `<br/><span class="text-xs text-slate-600">Filas con TOTAL en Excel: ${itemsWithExcelTotal.length}</span>`;
-
-            // Nota: no mostramos la lista detallada de filas ocultas para mantener la UI limpia.
-
-            const _debugInfo = document.getElementById('debugInfo');
-            if (_debugInfo) _debugInfo.innerHTML = debugHtml;
+            finalizeProcessing();
 
         } catch (err) {
             console.error(err);
@@ -167,35 +144,44 @@ async function processArrayBuffer(buffer) {
 
         applySplitToAllItems();
         recalcAll();
-
-        const _tabContainer = document.getElementById('tabContainer');
-        if (_tabContainer) _tabContainer.classList.remove('hidden');
-        const _detailView = document.getElementById('detailView');
-        if (_detailView) _detailView.classList.remove('hidden');
-        const _btnExport = document.getElementById('btnExport');
-        if (_btnExport) _btnExport.classList.remove('hidden');
-        const _debugContainer = document.getElementById('debugContainer');
-        if (_debugContainer) _debugContainer.classList.remove('hidden');
-
-        const grandSum = grandTotalVector.reduce((a,b) => a+b, 0);
-        const excelGroupSum = (excelGroupTotals && Array.isArray(excelGroupTotals)) ? excelGroupTotals.reduce((a,b) => a+b, 0) : 0;
-        const itemsWithExcelTotal = GLOBAL_ITEMS.filter(it => (it.excelTotal || 0) > 0);
-
-        let debugHtml = '';
-        debugHtml += `<span class="font-medium">Items cargados: ${GLOBAL_ITEMS.length}</span> · `;
-        debugHtml += `<span class="font-medium">Suma calculada total: ${formatNumber(grandSum)} Kg</span>`;
-        if (excelGroupTotals) debugHtml += ` · <span class="font-medium">Excel DETALLE TOTAL GRUPOS: ${formatNumber(excelGroupSum)} Kg</span>`;
-        debugHtml += `<br/><span class="text-xs text-slate-600">Filas con TOTAL en Excel: ${itemsWithExcelTotal.length}</span>`;
-
-        // Nota: no mostramos la lista detallada de filas ocultas para mantener la UI limpia.
-
-        const _debugInfo = document.getElementById('debugInfo');
-        if (_debugInfo) _debugInfo.innerHTML = debugHtml;
+        finalizeProcessing();
 
     } catch (err) {
         console.error(err);
         alert("Error al procesar el ArrayBuffer.");
     }
+}
+
+function showMainUI() {
+    const _tabContainer = document.getElementById('tabContainer');
+    if (_tabContainer) _tabContainer.classList.remove('hidden');
+    const _detailView = document.getElementById('detailView');
+    if (_detailView) _detailView.classList.remove('hidden');
+    const _btnExport = document.getElementById('btnExport');
+    if (_btnExport) _btnExport.classList.remove('hidden');
+    const _debugContainer = document.getElementById('debugContainer');
+    if (_debugContainer) _debugContainer.classList.remove('hidden');
+}
+
+function updateDebugInfo() {
+    const grandSum = grandTotalVector.reduce((a,b) => a+b, 0);
+    const excelGroupSum = (excelGroupTotals && Array.isArray(excelGroupTotals)) ? excelGroupTotals.reduce((a,b) => a+b, 0) : 0;
+    const itemsWithExcelTotal = GLOBAL_ITEMS.filter(it => (it.excelTotal || 0) > 0);
+
+    let debugHtml = '';
+    debugHtml += `<span class="font-medium">Items cargados: ${GLOBAL_ITEMS.length}</span> · `;
+    debugHtml += `<span class="font-medium">Suma calculada total: ${formatNumber(grandSum)} Kg</span>`;
+    if (excelGroupTotals) debugHtml += ` · <span class="font-medium">Excel DETALLE TOTAL GRUPOS: ${formatNumber(excelGroupSum)} Kg</span>`;
+    debugHtml += `<br/><span class="text-xs text-slate-600">Filas con TOTAL en Excel: ${itemsWithExcelTotal.length}</span>`;
+
+    // Nota: no mostramos la lista detallada de filas ocultas para mantener la UI limpia.
+    const _debugInfo = document.getElementById('debugInfo');
+    if (_debugInfo) _debugInfo.innerHTML = debugHtml;
+}
+
+function finalizeProcessing() {
+    showMainUI();
+    updateDebugInfo();
 }
 
 // Hacer accesible globalmente para pruebas de servidor local
@@ -392,7 +378,7 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
 
         // Filtrar filas que contienen textos no deseados (RESERVA, REVERSA, CLIENTES VARIOS, PROYECCION, PROYECCIÓN)
         const joinedText = ((lineVal || '') + '|' + (clientVal || '') + '|' + (yarnVal || '')).toString().toUpperCase();
-        const joinedNoAcc = joinedText.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+        const joinedNoAcc = stripDiacritics(joinedText);
         const forbidden = ['RESERVA', 'REVERSA', 'CLIENTES VARIOS', 'CLIENTESVARIOS', 'PROYECCION', 'PROYECCION'];
         const isForbidden = forbidden.some(tok => joinedNoAcc.includes(tok));
         if (isForbidden) continue;
