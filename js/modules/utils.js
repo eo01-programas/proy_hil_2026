@@ -24,18 +24,130 @@ const ORDERED_OTHER_KEYS = [
     "ABETE NANO BLANCO (KG)",
     "CAÑAMO (KG)"
 ];
+
+// Lightweight polyfills for older browsers (kept ES5 for compatibility)
+(function() {
+    if (!Array.from) {
+        Array.from = function(source, mapFn, thisArg) {
+            var out = [];
+            if (source == null) return out;
+            var hasMap = typeof mapFn === 'function';
+            var idx = 0;
+            var pushVal = function(val) {
+                out.push(hasMap ? mapFn.call(thisArg, val, idx++) : val);
+            };
+            if (typeof source.length === 'number') {
+                for (var i = 0; i < source.length; i++) pushVal(source[i]);
+                return out;
+            }
+            if (typeof source.forEach === 'function') {
+                source.forEach(function(v) { pushVal(v); });
+                return out;
+            }
+            return out;
+        };
+    }
+    if (!Object.assign) {
+        Object.assign = function(target) {
+            if (target == null) throw new TypeError('Cannot convert undefined or null to object');
+            var to = Object(target);
+            for (var i = 1; i < arguments.length; i++) {
+                var next = arguments[i];
+                if (next != null) {
+                    for (var key in next) {
+                        if (Object.prototype.hasOwnProperty.call(next, key)) {
+                            to[key] = next[key];
+                        }
+                    }
+                }
+            }
+            return to;
+        };
+    }
+    if (!Object.values) {
+        Object.values = function(obj) {
+            var out = [];
+            if (obj == null) return out;
+            for (var key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) out.push(obj[key]);
+            }
+            return out;
+        };
+    }
+    if (!String.prototype.includes) {
+        String.prototype.includes = function(search, start) {
+            if (typeof start !== 'number') start = 0;
+            if (start + search.length > this.length) return false;
+            return this.indexOf(search, start) !== -1;
+        };
+    }
+    if (!String.prototype.startsWith) {
+        String.prototype.startsWith = function(search, pos) {
+            var start = pos || 0;
+            return this.substr(start, search.length) === search;
+        };
+    }
+    if (!Array.prototype.includes) {
+        Array.prototype.includes = function(search, fromIndex) {
+            var len = this.length >>> 0;
+            if (!len) return false;
+            var i = fromIndex | 0;
+            if (i < 0) i = Math.max(len + i, 0);
+            for (; i < len; i++) {
+                if (this[i] === search || (search !== search && this[i] !== this[i])) return true;
+            }
+            return false;
+        };
+    }
+    if (!Array.prototype.find) {
+        Array.prototype.find = function(predicate, thisArg) {
+            if (this == null) throw new TypeError('Array.prototype.find called on null or undefined');
+            if (typeof predicate !== 'function') throw new TypeError('predicate must be a function');
+            var list = Object(this);
+            var len = list.length >>> 0;
+            for (var i = 0; i < len; i++) {
+                var value = list[i];
+                if (predicate.call(thisArg, value, i, list)) return value;
+            }
+            return undefined;
+        };
+    }
+})();
+
 function generateId() { return 'row_' + Math.random().toString(36).substr(2, 9); }
 
 function formatNumber(num) {
-    let n = Math.round(parseFloat(num || 0));
-    if (n === 0) return '-';
-    return n.toLocaleString('en-US');
+    var n = parseLocaleNumber(num);
+    if (!isFinite(n) || Math.abs(n) < 0.0000001) return '-';
+
+    // Preserve decimals only when needed (up to 2), trim trailing zeros
+    var hasDecimals = Math.round(n) !== n;
+    var fixed = hasDecimals ? n.toFixed(2) : Math.round(n).toString();
+    if (hasDecimals) {
+        fixed = fixed.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        if (fixed === '-0') return '-';
+    }
+
+    // Prefer native locale if available, fallback to manual grouping
+    try {
+        var localeFormatted = Number(fixed).toLocaleString('en-US');
+        if (localeFormatted && /^[0-9,\.\s\-]+$/.test(localeFormatted)) {
+            return localeFormatted;
+        }
+    } catch (e) { /* fallback below */ }
+
+    var parts = fixed.split('.');
+    var intPart = parts[0];
+    var sign = '';
+    if (intPart.charAt(0) === '-') { sign = '-'; intPart = intPart.slice(1); }
+    intPart = String(intPart).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return sign + intPart + (parts[1] ? '.' + parts[1] : '');
 }
 
 function formatCellClass(num) {
-    let n = Math.round(parseFloat(num || 0));
+    var n = parseLocaleNumber(num);
     if (n < 0) return 'negative-val text-num';
-    if (n === 0) return 'zero-val text-num';
+    if (Math.abs(n) < 0.0000001) return 'zero-val text-num';
     return 'font-semibold text-gray-700 text-num';
 }
 
@@ -49,20 +161,65 @@ function isAlgodon(name) {
     return /ALGODON|ALG|PIMA|TANGUIS|COP|UPLAND|BCI|USTCP|OCS|GOTS|FLAME|ELEGANT|COTTON/.test(n);
 }
 
+function stripDiacritics(input) {
+    if (input === null || input === undefined) return '';
+    var s = input.toString();
+    if (s.normalize) {
+        try {
+            return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        } catch (e) { /* fallback below */ }
+    }
+    return s
+        .replace(/[ÁÀÂÄÃÅ]/g, 'A').replace(/[áàâäãå]/g, 'a')
+        .replace(/[ÉÈÊË]/g, 'E').replace(/[éèêë]/g, 'e')
+        .replace(/[ÍÌÎÏ]/g, 'I').replace(/[íìîï]/g, 'i')
+        .replace(/[ÓÒÔÖÕ]/g, 'O').replace(/[óòôöõ]/g, 'o')
+        .replace(/[ÚÙÛÜ]/g, 'U').replace(/[úùûü]/g, 'u')
+        .replace(/[Ñ]/g, 'N').replace(/[ñ]/g, 'n')
+        .replace(/[Ç]/g, 'C').replace(/[ç]/g, 'c');
+}
+
 function parseLocaleNumber(stringNumber) {
     if (typeof stringNumber === 'number') return stringNumber;
     if (stringNumber === null || stringNumber === undefined || stringNumber === '') return 0;
-    let s = stringNumber.toString().trim();
-    s = s.replace(/\u00A0/g, '');
-    if (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) {
-        s = s.replace(/\./g, '').replace(/,/g, '.');
-    } else if (s.indexOf(',') !== -1) {
-        s = s.replace(/,/g, '.');
-    } else {
-        s = s.replace(/\./g, '');
+    var s = stringNumber.toString().trim();
+    if (!s) return 0;
+    s = s.replace(/\u00A0/g, '').replace(/\s+/g, '');
+
+    // If scientific notation, parse directly
+    if (/[eE]/.test(s)) {
+        var sci = Number(s.replace(',', '.'));
+        return isNaN(sci) ? 0 : sci;
+    }
+
+    var hasDot = s.indexOf('.') !== -1;
+    var hasComma = s.indexOf(',') !== -1;
+    if (hasDot && hasComma) {
+        // decimal separator is the last one
+        if (s.lastIndexOf('.') > s.lastIndexOf(',')) {
+            s = s.replace(/,/g, '');
+        } else {
+            s = s.replace(/\./g, '');
+            s = s.replace(/,/g, '.');
+        }
+    } else if (hasDot || hasComma) {
+        var sep = hasComma ? ',' : '.';
+        var parts = s.split(sep);
+        if (parts.length > 2) {
+            s = parts.join('');
+        } else {
+            var intPart = parts[0];
+            var fracPart = parts[1] || '';
+            if (fracPart.length > 0 && (fracPart.length <= 2 || intPart === '0' || intPart === '-0')) {
+                s = intPart + '.' + fracPart;
+            } else {
+                s = intPart + fracPart;
+            }
+        }
     }
     s = s.replace(/[^0-9\.-]/g, '');
-    return parseFloat(s) || 0;
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
 }
 
 function getNormalizedComponent(rawName) {
@@ -181,6 +338,19 @@ function cleanImportedName(yarnRaw, clientRaw) {
     let s = yarnRaw.toString().toUpperCase().trim();
     const client = (clientRaw || "").toString().toUpperCase().trim();
     
+    // Extraer porcentajes de participación (ej: 50/30/20%, 50/30/20, 50/30%, 50/30)
+    let percentageMatch = s.match(/(\d+[\s\/]\d+(?:[\s\/]\d+)?)\s*%?\s*$/);
+    let percentages = '';
+    if (percentageMatch) {
+        percentages = percentageMatch[1].replace(/\s+/g, '/');
+        // Asegurar que los porcentajes estén formateados correctamente (X/Y% o X/Y/Z%)
+        if (!percentages.includes('%')) {
+            percentages += '%';
+        }
+        // Remover los porcentajes del string principal
+        s = s.replace(/(\d+[\s\/]\d+(?:[\s\/]\d+)?)\s*%?\s*$/, '').trim();
+    }
+    
     // REGLA 1: Cambiar "PES PREPREVE" a "PES REPREVE"
     s = s.replace(/PES\s+PREPREVE/gi, 'PES REPREVE');
     
@@ -192,6 +362,14 @@ function cleanImportedName(yarnRaw, clientRaw) {
     // Limpiar espacios múltiples resultantes
     s = s.replace(/\s+/g, ' ').trim();
     
+    // REGLA 3: Si contiene LYOCELL (o TENCEL/TENCELL) y WOOL, cambiar LYOCELL a LYOCELL A100
+    if (/\b(LYOCELL|TENCEL|TENCELL)\b/i.test(s) && /\bWOOL\b/i.test(s)) {
+        s = s.replace(/\bLYOCELL\b/gi, 'LYOCELL A100');
+        s = s.replace(/\bTENCEL\b/gi, 'LYOCELL A100');
+        s = s.replace(/\bTENCELL\b/gi, 'LYOCELL A100');
+        s = s.replace(/\s+/g, ' ').trim();
+    }
+    
     const orgRegex = /\b(ORGANICO|ORGANIC|ORG\.?)/gi;
     if (orgRegex.test(s)) {
         const cert = (client === "LLL") ? "(OCS)" : "(GOTS)";
@@ -199,6 +377,12 @@ function cleanImportedName(yarnRaw, clientRaw) {
         s = s.replace(orgRegex, `$1 ${cert}`);
         s = s.replace(/\s+/g, " ").trim();
     }
+    
+    // Agregar los porcentajes al final entre paréntesis si existen
+    if (percentages) {
+        s += ` (${percentages})`;
+    }
+    
     return s;
 }
 
@@ -212,6 +396,21 @@ function getComponentNames(yarn) {
     if (cottonKeywords.some(kw => clean.includes(kw))) components.push(extractCottonName(yarn));
     otherFibers.filter(fiber => clean.includes(fiber)).forEach(fiber => components.push(fiber));
     return components.length > 0 ? components : [];
+}
+
+// Función para limpiar el nombre del material/grupo (aplica criterio LYOCELL A100 cuando hay WOOL)
+function cleanMaterialTitle(title) {
+    if (!title) return title;
+    let s = title.toString().toUpperCase();
+    
+    // Si contiene LYOCELL (o TENCEL/TENCELL) y WOOL, cambiar LYOCELL a LYOCELL A100
+    if (/\b(LYOCELL|TENCEL|TENCELL)\b/i.test(s) && /\bWOOL\b/i.test(s)) {
+        s = s.replace(/\bLYOCELL\b/gi, 'LYOCELL A100');
+        s = s.replace(/\bTENCEL\b/gi, 'LYOCELL A100');
+        s = s.replace(/\bTENCELL\b/gi, 'LYOCELL A100');
+    }
+    
+    return s;
 }
 
 function extractCottonName(yarn) {
@@ -365,17 +564,6 @@ function getCrudoGroupTitle(yarnName, clientName = "") {
     }
 }
 
-function classifyItem(item) {
-    if (!item) return 'CRUDO';
-    if (item._forcedClassification) return item._forcedClassification;
-    const lineaUpper = (item.line || "").toUpperCase().trim();
-    const isMultiFiber = hasMultipleFiberTypes(item.yarn);
-    if (lineaUpper === "CRUDO") return 'CRUDO';
-    if (lineaUpper === "MEZCLA") return 'MEZCLA';
-    if (lineaUpper === "HTR") return isMultiFiber ? 'MEZCLA' : 'CRUDO';
-    if (isMultiFiber) return 'MEZCLA';
-    return 'CRUDO';
-}
 // Helper: Extract component names from a mixed yarn, preserving type qualifiers like A100, STD, NANO
 function extractComponentNamesPreserveQualifiers(titleStr) {
     if (!titleStr) return [];
