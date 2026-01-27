@@ -7,7 +7,7 @@ function renderMezclasTable() {
     
     mezclaGroups.forEach((group, groupIndex) => { 
         if (Math.abs(group.groupRawTotals.reduce((a,b)=>a+b,0)) <= 0.01) return; 
-        tbody.innerHTML += `<tr id="group-header-${groupIndex}" class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}</td></tr>`; 
+        tbody.innerHTML += `<tr id="group-header-${groupIndex}" class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}</td></tr>`; 
         
         GLOBAL_ITEMS.forEach(item => { 
             if (!group.uniqueYarns.has(item.id)) return; 
@@ -166,11 +166,11 @@ function renderMezclasTable() {
             const match = yarnStr.match(/\((\d+\/\d+.*?)\)/);
             if (match) percentagesStr = ` (${match[1]})`;
         }
-        const fullTitle = group.title + percentagesStr;
+        const fullTitle = cleanMaterialTitle(group.title) + percentagesStr;
         
         // Update group title for display
         tbody.innerHTML = tbody.innerHTML.replace(
-            `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}</td></tr>`, 
+            `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}</td></tr>`, 
             `<tr class="group-header"><td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${fullTitle}</td></tr>`
         );
         
@@ -327,7 +327,7 @@ function renderMezclasTable() {
             if (headerEl) {
                 // Display percentages in TITLE ORDER (preserve original mapping), NOT finalOrder
                 const pctDisplay = titleParts.map(k => Math.round((pctCandidates[k]||0)*100)).join('/');
-                const headerHtml = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
+                const headerHtml = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
                 headerEl.innerHTML = headerHtml;
             }
         } catch (e) { /* ignore */ }
@@ -809,7 +809,7 @@ function saveGroupPcts(groupIndex) {
             });
             const pctDisplay = sortedInputs.map(i => Math.round(parseFloat(i.value) || 0)).join('/');
             const headerEl = document.getElementById(`group-header-${groupIndex}`);
-            if (headerEl) headerEl.innerHTML = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${group.title}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
+            if (headerEl) headerEl.innerHTML = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
         } catch (e) { /* ignore */ }
     // trigger recalc for all component indexes present
     for (let inp of inputs) {
