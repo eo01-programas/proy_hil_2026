@@ -1049,7 +1049,11 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
         let row = `<tr class="border-b hover:bg-gray-50"><td class="border px-3 py-2">${escapeHtml(client)}</td>`;
         for (let i = 0; i < 12; i++) {
             const val = values[i] || 0; totals[i] += val;
-            row += `<td class="border px-3 py-2 text-right">${formatNumber(val)}</td>`;
+            if (Math.abs(parseFloat(val || 0)) > 0.0001) {
+                row += `<td class="border px-3 py-2 text-right"><button type="button" class="fiber-cell-btn" data-fiber="${escapeHtml(fiberName)}" data-client="${escapeHtml(client)}" data-month="${i}" data-value="${val}" data-isalgodon="${isAlgodon ? 1 : 0}">${formatNumber(val)}</button></td>`;
+            } else {
+                row += `<td class="border px-3 py-2 text-right text-slate-400">-</td>`;
+            }
         }
         const sum = values.reduce((a, b) => a + b, 0);
         row += `<td class="border px-3 py-2 text-right font-bold">${formatNumber(sum)}</td></tr>`;
@@ -1076,28 +1080,6 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
     const authoritativeData = (sourceMap && sourceMap[fiberName]) ? sourceMap[fiberName] : null;
     const authoritativeTotals = (authoritativeData && Array.isArray(authoritativeData.totalValues)) ? authoritativeData.totalValues : null;
     
-    // If clients don't sum to authoritative, add a row for unassigned/discrepancy
-    if (authoritativeTotals) {
-        for (let i = 0; i < 12; i++) {
-            const diff = (parseFloat(authoritativeTotals[i]) || 0) - (totals[i] || 0);
-            if (Math.abs(diff) > 0.0001) {
-                // There's a discrepancy; add it as unassigned
-                let row = `<tr class="border-b bg-yellow-50 hover:bg-yellow-100"><td class="border px-3 py-2 italic text-gray-600">(No Asignado/Diferencia)</td>`;
-                let discRow = new Array(12).fill(0);
-                for (let j = 0; j < 12; j++) {
-                    discRow[j] = (parseFloat(authoritativeTotals[j]) || 0) - (totals[j] || 0);
-                }
-                for (let j = 0; j < 12; j++) {
-                    row += `<td class="border px-3 py-2 text-right">${formatNumber(discRow[j])}</td>`;
-                }
-                const discSum = discRow.reduce((a, b) => a + b, 0);
-                row += `<td class="border px-3 py-2 text-right font-bold">${formatNumber(discSum)}</td></tr>`;
-                tbody += row;
-                break; // Only add once
-            }
-        }
-    }
-
     // Total row: use authoritative totals for display
     let totalRow = `<tr class="bg-gray-200 font-bold border-top"><td class="border px-3 py-2">TOTAL</td>`;
     for (let i = 0; i < 12; i++) {
@@ -1109,9 +1091,176 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
     tbody += totalRow;
     document.getElementById('fiberDetailBody').innerHTML = tbody;
     document.getElementById('fiberDetailModal').classList.remove('hidden');
+    resetFiberDetailPanel();
+    wireFiberModalCellClicks();
 }
 
 function closeFiberModal() { document.getElementById('fiberDetailModal').classList.add('hidden'); }
+
+var FIBER_DETAIL_CTX = null;
+
+function resetFiberDetailPanel() {
+    const panel = document.getElementById('fiberDetailPanel');
+    if (panel) panel.classList.add('hidden');
+    const header = document.getElementById('fiberDetailHeader');
+    if (header) header.textContent = '';
+    const select = document.getElementById('fiberDetailSourceFilter');
+    if (select) select.innerHTML = '<option value="ALL">TODOS</option>';
+    const table = document.getElementById('fiberDetailContribTable');
+    if (table) table.innerHTML = '';
+    const list = document.getElementById('fiberDetailDropdownList');
+    if (list) list.innerHTML = '';
+    FIBER_DETAIL_CTX = null;
+}
+
+function wireFiberModalCellClicks() {
+    const body = document.getElementById('fiberDetailBody');
+    if (!body) return;
+    const buttons = body.querySelectorAll('.fiber-cell-btn');
+    for (let i = 0; i < buttons.length; i++) {
+        buttons[i].onclick = function() {
+            try {
+                const fiber = this.getAttribute('data-fiber') || '';
+                const client = this.getAttribute('data-client') || '';
+                const monthIdx = parseInt(this.getAttribute('data-month') || '0', 10);
+                const val = parseFloat(this.getAttribute('data-value') || '0') || 0;
+                const isAlgodon = (this.getAttribute('data-isalgodon') || '0') === '1';
+                showFiberCellDetail(fiber, client, monthIdx, val, isAlgodon);
+            } catch (e) { console.warn('Detalle celda error', e); }
+        };
+    }
+}
+
+function showFiberCellDetail(fiberName, client, monthIdx, displayedVal, isAlgodon) {
+    const contributors = getTraceContributors(fiberName, client, monthIdx, !!isAlgodon) || [];
+    const rows = [];
+    for (let i = 0; i < contributors.length; i++) {
+        const c = contributors[i] || {};
+        rows.push({
+            source: c.source || '',
+            groupTitle: c.groupTitle || '',
+            yarn: c.yarn || '',
+            type: c.type || '',
+            raw: (typeof c.raw !== 'undefined') ? c.raw : (c.rawItem || 0),
+            pct: c.pct || 0,
+            contrib: c.contrib || 0,
+            req: c.req || 0,
+            qq: c.qq || 0
+        });
+    }
+
+    let sumVal = 0;
+    rows.forEach(r => {
+        const v = isAlgodon ? (parseFloat(r.qq) || 0) : (parseFloat(r.req) || 0);
+        sumVal += v;
+    });
+    const diff = (parseFloat(displayedVal) || 0) - sumVal;
+    if (Math.abs(diff) > 0.0001) {
+        rows.push({
+            source: 'DIFERENCIA',
+            groupTitle: '',
+            yarn: '(No asignado)',
+            type: '',
+            raw: 0,
+            pct: 0,
+            contrib: 0,
+            req: isAlgodon ? 0 : diff,
+            qq: isAlgodon ? diff : 0
+        });
+    }
+
+    const monthLabel = (MONTH_NAMES && MONTH_NAMES[monthIdx]) ? MONTH_NAMES[monthIdx] : ('M' + (monthIdx + 1));
+    FIBER_DETAIL_CTX = {
+        fiberName: fiberName,
+        client: client,
+        monthIdx: monthIdx,
+        monthLabel: monthLabel,
+        displayedVal: displayedVal,
+        isAlgodon: !!isAlgodon,
+        rows: rows
+    };
+
+    const panel = document.getElementById('fiberDetailPanel');
+    if (panel) panel.classList.remove('hidden');
+    const header = document.getElementById('fiberDetailHeader');
+    if (header) header.textContent = `${fiberName} — ${client} — ${monthLabel}`;
+
+    const select = document.getElementById('fiberDetailSourceFilter');
+    if (select) {
+        const sources = {};
+        rows.forEach(r => { if (r.source) sources[r.source] = true; });
+        let options = '<option value="ALL">TODOS</option>';
+        Object.keys(sources).forEach(s => { options += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+        select.innerHTML = options;
+        select.onchange = function() { renderFiberDetailPanel(); };
+    }
+
+    renderFiberDetailPanel();
+}
+
+function renderFiberDetailPanel() {
+    if (!FIBER_DETAIL_CTX) return;
+    const select = document.getElementById('fiberDetailSourceFilter');
+    const filter = select ? (select.value || 'ALL') : 'ALL';
+    const rows = (FIBER_DETAIL_CTX.rows || []).filter(r => {
+        if (filter === 'ALL') return true;
+        return (r.source || '') === filter;
+    });
+
+    let html = '<thead><tr class="bg-slate-100">';
+    html += '<th class="px-2 py-1 text-left">Fuente</th>';
+    html += '<th class="px-2 py-1 text-left">Grupo</th>';
+    html += '<th class="px-2 py-1 text-left">Hilado</th>';
+    html += '<th class="px-2 py-1 text-right">Raw</th>';
+    html += '<th class="px-2 py-1 text-right">%</th>';
+    html += '<th class="px-2 py-1 text-right">Contrib</th>';
+    html += `<th class="px-2 py-1 text-right">${FIBER_DETAIL_CTX.isAlgodon ? 'QQ' : 'KG REQ'}</th>`;
+    html += '</tr></thead><tbody>';
+
+    if (!rows.length) {
+        html += '<tr><td colspan="7" class="px-3 py-2 text-sm text-slate-500">Sin contribuciones.</td></tr>';
+    } else {
+        rows.forEach(r => {
+            html += '<tr class="border-b">';
+            html += `<td class="px-2 py-1">${escapeHtml(r.source || '')}</td>`;
+            html += `<td class="px-2 py-1">${escapeHtml(r.groupTitle || '')}</td>`;
+            html += `<td class="px-2 py-1">${escapeHtml(r.yarn || '')}</td>`;
+            html += `<td class="px-2 py-1 text-right">${formatNumber(r.raw || 0)}</td>`;
+            html += `<td class="px-2 py-1 text-right">${r.pct ? (Math.round((r.pct || 0) * 100) + '%') : ''}</td>`;
+            html += `<td class="px-2 py-1 text-right">${formatNumber(r.contrib || 0)}</td>`;
+            const mainVal = FIBER_DETAIL_CTX.isAlgodon ? (r.qq || 0) : (r.req || 0);
+            html += `<td class="px-2 py-1 text-right">${formatNumber(mainVal)}</td>`;
+            html += '</tr>';
+        });
+    }
+
+    // Totals
+    let totalMain = 0;
+    rows.forEach(r => { totalMain += FIBER_DETAIL_CTX.isAlgodon ? (parseFloat(r.qq) || 0) : (parseFloat(r.req) || 0); });
+    html += `<tr class="bg-slate-50 font-bold"><td class="px-2 py-1">TOTAL</td><td></td><td></td><td></td><td></td><td></td><td class="px-2 py-1 text-right">${formatNumber(totalMain)}</td></tr>`;
+    html += '</tbody>';
+    const table = document.getElementById('fiberDetailContribTable');
+    if (table) table.innerHTML = html;
+
+    // Dropdown list (collapsible)
+    const list = document.getElementById('fiberDetailDropdownList');
+    if (list) {
+        let listHtml = '';
+        rows.forEach(r => {
+            const mainVal = FIBER_DETAIL_CTX.isAlgodon ? (r.qq || 0) : (r.req || 0);
+            const title = `${r.source || ''} — ${r.yarn || ''} — ${formatNumber(mainVal)}`;
+            listHtml += `<details class="fiber-detail-item"><summary>${escapeHtml(title)}</summary>`;
+            listHtml += `<div class="fiber-detail-item-body">`;
+            listHtml += `<div><strong>Grupo:</strong> ${escapeHtml(r.groupTitle || '-')}</div>`;
+            listHtml += `<div><strong>Raw:</strong> ${formatNumber(r.raw || 0)}</div>`;
+            listHtml += `<div><strong>%:</strong> ${r.pct ? (Math.round((r.pct || 0) * 100) + '%') : '-'}</div>`;
+            listHtml += `<div><strong>Contrib:</strong> ${formatNumber(r.contrib || 0)}</div>`;
+            listHtml += `<div><strong>${FIBER_DETAIL_CTX.isAlgodon ? 'QQ' : 'KG REQ'}:</strong> ${formatNumber(mainVal)}</div>`;
+            listHtml += `</div></details>`;
+        });
+        list.innerHTML = listHtml || '<div class="text-sm text-slate-500">Sin contenido.</div>';
+    }
+}
 
 // Build contributors for a given fiber/client/month
 function getTraceContributors(fiberDisplay, client, monthIdx, isAlgodon) {
@@ -1120,7 +1269,7 @@ function getTraceContributors(fiberDisplay, client, monthIdx, isAlgodon) {
     const normalizeForCompare = (s) => {
         if (s == null) return '';
         try {
-            return s.toString().toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^A-Z0-9]/g, '');
+            return stripDiacritics(s.toString().toUpperCase()).replace(/[^A-Z0-9]/g, '');
         } catch (e) {
             return s.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
@@ -1361,7 +1510,7 @@ function logPimaOrgOcsDetail() {
         const normStr = (input) => {
             if (!input) return '';
             try {
-                return input.toString().toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^A-Z0-9_]/g, ' ');
+                return stripDiacritics(input.toString().toUpperCase()).replace(/[^A-Z0-9_]/g, ' ');
             } catch (e) { return input.toString().toUpperCase().replace(/[^A-Z0-9_]/g, ' '); }
         };
 
@@ -1487,7 +1636,7 @@ function logPimaOrgOcsAllMonths() {
         const normStr = (input) => {
             if (!input) return '';
             try {
-                return input.toString().toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^A-Z0-9_]/g, ' ');
+                return stripDiacritics(input.toString().toUpperCase()).replace(/[^A-Z0-9_]/g, ' ');
             } catch (e) { return input.toString().toUpperCase().replace(/[^A-Z0-9_]/g, ' '); }
         };
 
@@ -2106,7 +2255,7 @@ function logFiberDetailAllMonths(fiberLabel, tokenMatcher, merma = 0.40) {
 // Helper: normaliza string para comparación
 function normStrFiber(input) {
     if (!input) return '';
-    try { return input.toString().toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^A-Z0-9_]/g, ' '); }
+    try { return stripDiacritics(input.toString().toUpperCase()).replace(/[^A-Z0-9_]/g, ' '); }
     catch (e) { return input.toString().toUpperCase().replace(/[^A-Z0-9_]/g, ' '); }
 }
 
