@@ -1,8 +1,8 @@
 // Orchestrator: Lógica de Negocio Principal (Mezclas y Crudos)
 (function(){
-    const v = new Date().toISOString();
+    const v = 'Version 04';
     const el = document.getElementById('appVersion');
-    if (el) el.textContent = 'v ' + v + ' (Separación OCS/GOTS)';
+    if (el) el.textContent = v;
     console.log('Orchestrator loaded - version', v);
     window.PROY_VERSION = v;
 })();
