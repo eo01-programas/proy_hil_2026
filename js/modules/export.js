@@ -3,40 +3,66 @@
 
 function exportToExcel() {
     function getColRef(c) { return XLSX.utils.encode_col(c); }
+    function toPlainText(v) {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'object' && v.f) return '';
+        return v.toString().trim().toUpperCase();
+    }
     function isMonthHeaderToken(v) {
-        const s = (v === null || v === undefined) ? '' : v.toString().trim().toUpperCase();
+        const s = toPlainText(v);
         return MONTH_NAMES.includes(s);
     }
     function isNumericCell(v) {
-        return typeof v === 'number' && !isNaN(v);
+        if (typeof v === 'number') return !isNaN(v);
+        if (v && typeof v === 'object' && v.f) return true;
+        return false;
+    }
+    function rowHasTotalWord(row) {
+        if (!row || !row.length) return false;
+        for (let i = 0; i < row.length; i++) {
+            const t = toPlainText(row[i]);
+            if (t.includes('TOTAL')) return true;
+        }
+        return false;
+    }
+    function rowHasHeaderKeyword(row) {
+        if (!row || !row.length) return false;
+        for (let i = 0; i < row.length; i++) {
+            const t = toPlainText(row[i]);
+            if (t.includes('LINEA') || t.includes('CLIENTE') || t.includes('HILADO') || t.includes('FIBRA') || t.includes('CONCEPTO') || t.includes('TOTAL')) return true;
+        }
+        return false;
+    }
+    function getMonthColsFromHeaderRow(row) {
+        const cols = [];
+        for (let c = 0; c < row.length; c++) {
+            if (isMonthHeaderToken(row[c])) cols.push(c);
+        }
+        return cols;
     }
     function applyHorizontalTotalFormulas(rows) {
         if (!rows || !rows.length) return;
         for (let i = 0; i < rows.length; i++) {
             const header = rows[i] || [];
-            const monthCols = [];
-            for (let c = 0; c < header.length; c++) {
-                if (isMonthHeaderToken(header[c])) monthCols.push(c);
-            }
-            if (monthCols.length < 3) continue;
+            const monthCols = getMonthColsFromHeaderRow(header);
+            if (monthCols.length < 1 || !rowHasHeaderKeyword(header)) continue;
 
             let totalCol = -1;
             for (let c = 0; c < header.length; c++) {
-                const txt = (header[c] || '').toString().toUpperCase();
+                const txt = toPlainText(header[c]);
                 if (txt.includes('TOTAL')) { totalCol = c; break; }
             }
             if (totalCol === -1) totalCol = Math.max.apply(null, monthCols) + 1;
 
             const minCol = Math.min.apply(null, monthCols);
             const maxCol = Math.max.apply(null, monthCols);
+            let dataStartRow = -1; // 1-based row index in Excel
             for (let r = i + 1; r < rows.length; r++) {
                 const row = rows[r] || [];
                 const nonEmpty = row.filter(v => v !== '' && v !== null && typeof v !== 'undefined').length;
-                if (nonEmpty === 0) break;
+                if (nonEmpty === 0) { dataStartRow = -1; break; }
 
-                let nextHeaderMonthCount = 0;
-                for (let c = 0; c < row.length; c++) if (isMonthHeaderToken(row[c])) nextHeaderMonthCount++;
-                if (nextHeaderMonthCount >= 3) break;
+                if (getMonthColsFromHeaderRow(row).length >= 1 && rowHasHeaderKeyword(row)) break;
 
                 if (nonEmpty <= 1) continue; // filas de título/separador
                 let hasNumeric = false;
@@ -46,11 +72,53 @@ function exportToExcel() {
                 if (!hasNumeric) continue;
 
                 const excelRow = r + 1;
-                row[totalCol] = {
-                    t: 'n',
-                    f: `SUM(${getColRef(minCol)}${excelRow}:${getColRef(maxCol)}${excelRow})`
-                };
+                const isTotalRow = rowHasTotalWord(row);
+                if (!isTotalRow) {
+                    row[totalCol] = {
+                        t: 'n',
+                        f: `SUM(${getColRef(minCol)}${excelRow}:${getColRef(maxCol)}${excelRow})`
+                    };
+                    if (dataStartRow === -1) dataStartRow = excelRow;
+                } else if (dataStartRow !== -1 && excelRow > dataStartRow) {
+                    for (let m = 0; m < monthCols.length; m++) {
+                        const monthCol = monthCols[m];
+                        const monthColRef = getColRef(monthCol);
+                        row[monthCol] = { t: 'n', f: `SUM(${monthColRef}${dataStartRow}:${monthColRef}${excelRow - 1})` };
+                    }
+                    row[totalCol] = {
+                        t: 'n',
+                        f: `SUM(${getColRef(totalCol)}${dataStartRow}:${getColRef(totalCol)}${excelRow - 1})`
+                    };
+                    dataStartRow = -1;
+                }
                 rows[r] = row;
+            }
+        }
+    }
+    function computeColumnWidths(rows, minW = 10, maxW = 48) {
+        const maxByCol = [];
+        (rows || []).forEach(row => {
+            const r = row || [];
+            for (let c = 0; c < r.length; c++) {
+                const val = r[c];
+                const sample = (val && typeof val === 'object' && val.f) ? '1234567890.00' : ((val === null || val === undefined) ? '' : val.toString());
+                const w = Math.max(minW, Math.min(maxW, sample.length + 2));
+                maxByCol[c] = Math.max(maxByCol[c] || minW, w);
+            }
+        });
+        return maxByCol.map(w => ({ wch: w || minW }));
+    }
+    function applyNumericFormats(sheet) {
+        if (!sheet || !sheet['!ref']) return;
+        const range = XLSX.utils.decode_range(sheet['!ref']);
+        for (let r = range.s.r; r <= range.e.r; r++) {
+            for (let c = range.s.c; c <= range.e.c; c++) {
+                const ref = XLSX.utils.encode_cell({ r, c });
+                const cell = sheet[ref];
+                if (!cell) continue;
+                if (cell.t === 'n' || (cell.f && cell.t !== 's')) {
+                    cell.z = '#,##0.00';
+                }
             }
         }
     }
@@ -170,6 +238,7 @@ function exportToExcel() {
 
     const sheet1 = XLSX.utils.aoa_to_sheet(ws_data1);
     sheet1['!cols'] = [{wch:12}, {wch:15}, {wch:30}, ...monthIndices.map(() => ({wch:12})), {wch:12}];
+    applyNumericFormats(sheet1);
     XLSX.utils.book_append_sheet(wb, sheet1, "Detalle y Gerencial");
 
     const ws_data2 = [];
@@ -245,6 +314,8 @@ function exportToExcel() {
     function addFiberTableToSheet(title, dataObj, orderedKeys) {
         ws_data2.push([title]);
         ws_data2.push(["FIBRA", ...monthHeader, "TOTAL"]);
+        const firstDataExcelRow = ws_data2.length + 1;
+        let addedRows = 0;
         orderedKeys.forEach(fn => {
             const d = dataObj[fn] || { totalValues: new Array(12).fill(0) };
             const excelRow = ws_data2.length + 1;
@@ -255,7 +326,19 @@ function exportToExcel() {
             });
             row.push({ t: 'n', f: `SUM(${getColRef(1)}${excelRow}:${getColRef(monthIndices.length)}${excelRow})` });
             ws_data2.push(row);
+            addedRows++;
         });
+        if (addedRows > 0) {
+            const lastDataExcelRow = ws_data2.length;
+            const totalRow = ["TOTAL GENERAL"];
+            monthIndices.forEach((idx, m) => {
+                const col = getColRef(1 + m);
+                totalRow.push({ t: 'n', f: `SUM(${col}${firstDataExcelRow}:${col}${lastDataExcelRow})` });
+            });
+            const totalCol = getColRef(1 + monthIndices.length);
+            totalRow.push({ t: 'n', f: `SUM(${totalCol}${firstDataExcelRow}:${totalCol}${lastDataExcelRow})` });
+            ws_data2.push(totalRow);
+        }
         ws_data2.push([]);
     }
     addFiberTableToSheet("ALGODON (QQ)", detailAlgodon, ORDERED_COTTON_KEYS);
@@ -263,6 +346,7 @@ function exportToExcel() {
 
     const sheet2 = XLSX.utils.aoa_to_sheet(ws_data2);
     sheet2['!cols'] = [{wch:12}, {wch:15}, {wch:30}, ...monthIndices.map(() => ({wch:12})), {wch:12}];
+    applyNumericFormats(sheet2);
     XLSX.utils.book_append_sheet(wb, sheet2, "Materiales y Resumen");
 
     monthIndices.forEach(idx => {
@@ -310,6 +394,7 @@ function exportToExcel() {
 
         const sheet = XLSX.utils.aoa_to_sheet(ws);
         sheet['!cols'] = [{wch:30}, {wch:16}, {wch:48}, {wch:14}];
+        applyNumericFormats(sheet);
         XLSX.utils.book_append_sheet(wb, sheet, `MATERIALES_${MONTH_NAMES[idx]}`);
     });
 
@@ -324,15 +409,24 @@ function exportToExcel() {
     appendSection(detalleRows, "RESUMEN GERENCIAL - LINEA", extractTableAoa('summaryLineTable'));
     const detalleRowsFinal = ensureRows(detalleRows, 'Detalle sin datos');
     applyHorizontalTotalFormulas(detalleRowsFinal);
-    XLSX.utils.book_append_sheet(wbResumen, XLSX.utils.aoa_to_sheet(detalleRowsFinal), "Detalle");
+    const wsDetalle = XLSX.utils.aoa_to_sheet(detalleRowsFinal);
+    wsDetalle['!cols'] = computeColumnWidths(detalleRowsFinal, 10, 50);
+    applyNumericFormats(wsDetalle);
+    XLSX.utils.book_append_sheet(wbResumen, wsDetalle, "Detalle");
 
     const crudosRows = ensureRows(extractTableAoa('crudosTable'), 'Mat. crudos sin datos');
     applyHorizontalTotalFormulas(crudosRows);
-    XLSX.utils.book_append_sheet(wbResumen, XLSX.utils.aoa_to_sheet(crudosRows), "Mat_crudos");
+    const wsCrudos = XLSX.utils.aoa_to_sheet(crudosRows);
+    wsCrudos['!cols'] = computeColumnWidths(crudosRows, 10, 50);
+    applyNumericFormats(wsCrudos);
+    XLSX.utils.book_append_sheet(wbResumen, wsCrudos, "Mat_crudos");
 
     const mezclasRows = ensureRows(extractTableAoa('mezclasTable'), 'Mat. mezclas sin datos');
     applyHorizontalTotalFormulas(mezclasRows);
-    XLSX.utils.book_append_sheet(wbResumen, XLSX.utils.aoa_to_sheet(mezclasRows), "Mat_mezclas");
+    const wsMezclas = XLSX.utils.aoa_to_sheet(mezclasRows);
+    wsMezclas['!cols'] = computeColumnWidths(mezclasRows, 10, 50);
+    applyNumericFormats(wsMezclas);
+    XLSX.utils.book_append_sheet(wbResumen, wsMezclas, "Mat_mezclas");
 
     const resumenRows = [];
     appendSection(resumenRows, "RESUMEN", extractTableAoa('balanceTable'));
@@ -340,7 +434,10 @@ function exportToExcel() {
     appendSection(resumenRows, "OTRAS FIBRAS (KG REQ)", extractTableAoa('otrasTable'));
     const resumenRowsFinal = ensureRows(resumenRows, 'Resumen sin datos');
     applyHorizontalTotalFormulas(resumenRowsFinal);
-    XLSX.utils.book_append_sheet(wbResumen, XLSX.utils.aoa_to_sheet(resumenRowsFinal), "Resumen");
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumenRowsFinal);
+    wsResumen['!cols'] = computeColumnWidths(resumenRowsFinal, 10, 50);
+    applyNumericFormats(wsResumen);
+    XLSX.utils.book_append_sheet(wbResumen, wsResumen, "Resumen");
 
     // Descargar ambos archivos
     XLSX.writeFile(wb, "PCP_Gestion_Total_2026_Meses.xlsx");
