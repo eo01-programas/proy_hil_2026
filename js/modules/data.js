@@ -196,6 +196,26 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
     let colStartIndex = -1;
     let rowYearIndex = -1;
     let yearFound = null;
+    let headerRowIndex = -1;
+    let lineColIndex = 0;
+    let clientColIndex = 2;
+    let yarnColIndex = 3;
+
+    function normalizeHeaderText(v) {
+        return stripDiacritics((v || '').toString().toUpperCase()).trim();
+    }
+
+    // Solo acepta celdas realmente numericas para evitar que textos
+    // como "70 DIAS ANTES..." se interpreten como 70.
+    function parseMonthCellValue(rawCell) {
+        if (typeof rawCell === 'number') return rawCell;
+        if (rawCell === null || rawCell === undefined || rawCell === '') return 0;
+        const s = rawCell.toString().trim();
+        if (!s) return 0;
+        if (s.charAt(0) === '=') return 0;
+        if (/[A-Za-z\u00C0-\u024F]/.test(s)) return 0;
+        return parseLocaleNumber(s);
+    }
 
     const MONTH_TOKENS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
     // Prioridad: buscar explícitamente 2026 (si existe en encabezados)
@@ -264,6 +284,43 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
     }
     if (colStartIndex === -1) return alert("No se encontró año en el archivo. Verifica que el Excel tenga la estructura correcta.");
 
+    // Detectar columnas reales de LINEA/CLIENTE/HILADO desde el encabezado.
+    let bestHeaderScore = -1;
+    const headerSearchStart = Math.max(0, rowYearIndex - 2);
+    const headerSearchEnd = Math.min(jsonData.length - 1, rowYearIndex + 4);
+    for (let r = headerSearchStart; r <= headerSearchEnd; r++) {
+        const row = jsonData[r] || [];
+        let lineIdx = -1;
+        let clientIdx = -1;
+        let yarnIdx = -1;
+        for (let c = 0; c < row.length; c++) {
+            if (hiddenCols && hiddenCols.has(c)) continue;
+            const txt = normalizeHeaderText(row[c]);
+            if (!txt) continue;
+            if (lineIdx === -1 && txt.includes('LINEA')) lineIdx = c;
+            if (clientIdx === -1 && txt.includes('CLIENTE')) clientIdx = c;
+            if (yarnIdx === -1 && (txt.includes('HILADO') || txt.includes('HILO') || txt.includes('YARN'))) yarnIdx = c;
+        }
+        let score = 0;
+        if (lineIdx !== -1) score++;
+        if (clientIdx !== -1) score++;
+        if (yarnIdx !== -1) score++;
+        if (score > bestHeaderScore) {
+            bestHeaderScore = score;
+            headerRowIndex = r;
+            lineColIndex = (lineIdx !== -1) ? lineIdx : 0;
+            clientColIndex = (clientIdx !== -1) ? clientIdx : 2;
+            yarnColIndex = (yarnIdx !== -1) ? yarnIdx : 3;
+        }
+        if (score === 3) break;
+    }
+    if (clientColIndex === -1 && yarnColIndex > 0) clientColIndex = yarnColIndex - 1;
+    if (yarnColIndex === -1 && clientColIndex >= 0) yarnColIndex = clientColIndex + 1;
+    if (lineColIndex === -1) lineColIndex = 0;
+    if (clientColIndex < 0) clientColIndex = 2;
+    if (yarnColIndex < 0) yarnColIndex = 3;
+    console.log('[HEADER DETECT]', { headerRowIndex, lineColIndex, clientColIndex, yarnColIndex, yearFound, rowYearIndex, colStartIndex });
+
     // Mapear los 12 meses a las columnas VISIBLES comenzando en colStartIndex
     let monthColumnIndexes = [];
     if (colStartIndex !== -1) {
@@ -292,16 +349,16 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
     for (let testRow = dataStartRow; testRow < Math.min(dataStartRow + 200, jsonData.length); testRow++) {
         const row = jsonData[testRow];
         if (!row || row.length < 4) continue;
-        const lineVal = (row[0] || "").toString().trim();
-        const clientVal = (row[2] || "").toString().trim();
-        const yarnVal = (row[3] || "").toString().trim();
+        const lineVal = (row[lineColIndex] || "").toString().trim();
+        const clientVal = (row[clientColIndex] || "").toString().trim();
+        const yarnVal = (row[yarnColIndex] || "").toString().trim();
         
         // Contar valores numéricos significativos en las columnas de meses
         let significantValues = 0;
         for (let m = 0; m < Math.min(12, monthColumnIndexes.length); m++) {
             const colIdx = monthColumnIndexes[m];
             const cellVal = row[colIdx];
-            const numVal = parseLocaleNumber(cellVal);
+            const numVal = parseMonthCellValue(cellVal);
             if (Math.abs(numVal) > 0.01) {
                 significantValues++;
             }
@@ -317,11 +374,11 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
     }
     if (monthColumnIndexes.length === 12) {
         excelGroupTotals = new Array(12).fill(0);
-        const formulaRow = jsonData[2] || [];
+        const formulaRow = jsonData[Math.max(0, rowYearIndex - 1)] || [];
         for (let m = 0; m < 12; m++) {
             const colIdx = monthColumnIndexes[m];
             const cellValue = formulaRow[colIdx];
-            excelGroupTotals[m] = parseLocaleNumber(cellValue);
+            excelGroupTotals[m] = parseMonthCellValue(cellValue);
         }
         console.log('excelGroupTotals extraído (columnas visibles):', excelGroupTotals);
     } else {
@@ -345,9 +402,9 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
         if (hiddenRows && hiddenRows.has(i)) continue;
         const row = jsonData[i];
         if (!row) continue;
-        const lineVal = (row[0] || "").toString().trim();
-        const clientVal = (row[2] || "").toString().trim();
-        let yarnVal = (row[3] || "").toString();
+        const lineVal = (row[lineColIndex] || "").toString().trim();
+        const clientVal = (row[clientColIndex] || "").toString().trim();
+        let yarnVal = (row[yarnColIndex] || "").toString();
 
         // Calcular valores mensuales primero (usar monthColumnIndexes si está mapeado)
         let rowSum = 0;
@@ -355,7 +412,7 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
         for (let m = 0; m < 12; m++) {
             const colIdx = (monthColumnIndexes && monthColumnIndexes[m] !== undefined) ? monthColumnIndexes[m] : (colStartIndex + m);
             const rawCell = row[colIdx];
-            const val = parseLocaleNumber(rawCell);
+            const val = parseMonthCellValue(rawCell);
             rowValues.push(val);
             rowSum += val;
             grandVectorTemp[m] += val;
@@ -363,7 +420,7 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set()) {
 
         // Detectar celda Excel TOTAL (si existe justo después de la última columna de mes mapeada)
         const excelTotalCell = row[(monthColumnIndexes && monthColumnIndexes.length > 0) ? monthColumnIndexes[11] + 1 : (colStartIndex + 12)];
-        const excelTotal = excelTotalCell ? parseLocaleNumber(excelTotalCell) : 0;
+        const excelTotal = excelTotalCell ? parseMonthCellValue(excelTotalCell) : 0;
 
         // Determinar si la fila debe incluirse: si tiene suma significativa, si tiene excelTotal, o si contiene la palabra TOTAL
         const rowContainsTOTAL = row.some(c => (c || '').toString().toUpperCase().includes('TOTAL'));
