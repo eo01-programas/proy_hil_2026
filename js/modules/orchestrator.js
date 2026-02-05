@@ -549,20 +549,37 @@ function recalcAll() {
             yarnForSignature = yarnForSignature.replace(/\s+/g, ' ').trim();
             
             // AGGRESSIVE CLEANING: Keep only words that contain fiber keywords (remove decorative text like "B2NT19 OATMEAL")
-            const fiberKeywords = ['PIMA', 'LYOCELL', 'VISCOSA', 'ALGODON', 'ORG', 'ORGANICO', 'PES', 'POLY', 'POLIESTER', 
+            const fiberKeywords = ['PIMA', 'LYOCELL', 'VISCOSA', 'ALGODON', 'COTON', 'COTTON', 'ORG', 'ORGANICO', 'PES', 'POLY', 'POLIESTER', 
                                     'LANA', 'WOOL', 'NYLON', 'ELASTANO', 'SPANDEX', 'ACRILICO', 'LINO', 'HEMP', 'COP', 
-                                    'REPREVE', 'PREPREVE', 'GOTS', 'TENCEL', 'MODAL', 'BAMBOO'];
+                                    'REPREVE', 'PREPREVE', 'RECYCLED', 'RECICLADO', 'GOTS', 'TENCEL', 'MODAL', 'BAMBOO'];
             const cleanParts = yarnForSignature.split(/\s+/).filter(word => {
                 const wordUpper = word.toUpperCase();
+                if (wordUpper === '/') return true; // keep separators so we preserve component splits
                 return fiberKeywords.some(kw => wordUpper.includes(kw)) || /^[\(\[]?\d/.test(word);
             });
             yarnForSignature = cleanParts.join(' ').trim();
 
             // 4) Split into component names
-            let compNames = getComponentNames(yarnForSignature);
+            // IMPORTANT: If percentages exist, preserve the ORIGINAL order from the yarn
+            // so pct[i] maps to the correct component (e.g., "MODAL / COP ORGANICO (75/25%)").
+            let compNames = [];
+            if (pcts && pcts.length > 0) {
+                try {
+                    if (typeof extractComponentNamesPreserveQualifiers === 'function') {
+                        compNames = extractComponentNamesPreserveQualifiers(yarnForSignature) || [];
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            if (!compNames || compNames.length === 0) {
+                compNames = getComponentNames(yarnForSignature);
+            }
 
             // Caso especial: 1 nombre, multiples porcentajes (e.g. "Algodon/Poly 50/50")
             if (compNames.length === 1 && pcts.length > 1) compNames = splitComponentsByKeywords(compNames[0], pcts.length);
+            // If counts still don't match, attempt a keyword-based split using expected count
+            if (pcts.length > 1 && compNames.length !== pcts.length) {
+                try { compNames = splitComponentsByKeywords(yarnForSignature, pcts.length) || compNames; } catch (e) { /* ignore */ }
+            }
             let usePcts = pcts.slice();
             if (usePcts.length === 0 && compNames.length > 1) { const equal = 1 / compNames.length; usePcts = Array(compNames.length).fill(equal); }
 
