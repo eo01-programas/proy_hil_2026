@@ -321,17 +321,6 @@ function renderMezclasTable() {
             group._pctSaved = true;
         }
 
-        // Update group header to always include the determined percentages (if any)
-        try {
-            const headerEl = document.getElementById(`group-header-${groupIndex}`);
-            if (headerEl) {
-                // Display percentages in TITLE ORDER (preserve original mapping), NOT finalOrder
-                const pctDisplay = titleParts.map(k => Math.round((pctCandidates[k]||0)*100)).join('/');
-                const headerHtml = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
-                headerEl.innerHTML = headerHtml;
-            }
-        } catch (e) { /* ignore */ }
-
         // Debug: when user reports wrong totals, log details for this group's mapping
         try {
             if (rawTitle && /PES\s+RECICLADO\s*\/?\s*COTTON/i.test(rawTitle)) {
@@ -375,6 +364,36 @@ function renderMezclasTable() {
             const sum = (compVector || []).reduce((a,b)=>a+(b||0),0);
             initialPcts[matCompName] = groupTotalSum > 0 ? sum / groupTotalSum : 0;
         });
+
+        // Reconcile displayed percentages with actual component totals (avoid 4/3/3 display when real is 40/30/30)
+        try {
+            Object.keys(initialPcts).forEach(k => {
+                const actual = initialPcts[k] || 0;
+                const shown = pctCandidates[k] || 0;
+                if (actual > 0) {
+                    // If mismatch is large, trust actual totals
+                    if (shown <= 0 || Math.abs(shown - actual) > 0.05) {
+                        pctCandidates[k] = actual;
+                    }
+                }
+            });
+            const sum2 = Object.keys(pctCandidates).reduce((s,k)=>s + (pctCandidates[k]||0), 0);
+            if (sum2 > 0 && Math.abs(sum2 - 1) > TOL) {
+                const scale2 = 1 / sum2;
+                Object.keys(pctCandidates).forEach(k => { pctCandidates[k] = (pctCandidates[k] || 0) * scale2; });
+            }
+        } catch (e) { /* ignore */ }
+
+        // Update group header to always include the determined percentages (if any)
+        try {
+            const headerEl = document.getElementById(`group-header-${groupIndex}`);
+            if (headerEl) {
+                // Display percentages in TITLE ORDER (preserve original mapping), NOT finalOrder
+                const pctDisplay = titleParts.map(k => Math.round((pctCandidates[k]||0)*100)).join('/');
+                const headerHtml = `<td colspan="${4 + activeIndices.length + 1}" class="py-2 pl-4">MATERIAL: ${cleanMaterialTitle(group.title)}${pctDisplay ? ' (' + pctDisplay + '%)' : ''}</td>`;
+                headerEl.innerHTML = headerHtml;
+            }
+        } catch (e) { /* ignore */ }
 
         // If we have explicit title percentages, build a desiredVectors map that assigns
         // the correct vector to each titlePart according to title order (by canonical match or pct match).
@@ -422,7 +441,7 @@ function renderMezclasTable() {
 
         // Second pass: render rows in finalOrder, but pull vector from desiredVectors (title-ordered) when possible
         finalOrder.forEach((matCompName, compIndex) => {
-            const defaultMerma = compIndex === 0 ? 40 : 15;
+            const defaultMerma = isAlgodon(matCompName) ? 40 : 15;
             // Display label should be material name only; % goes into the input field
             const displayLabel = matCompName;
             // Determine compVector to render: prefer desiredVectors matching this material (by canonical or exact), else use initialVectors
@@ -616,7 +635,7 @@ function recalcMezclaComponent(groupIndex, compIndex) {
     // Build componentsByMaterial vector (may be zeros)
     const compEntry = componentsByMaterial[matCompName] || { totalVector: new Array(12).fill(0), rawKeys: [] };
     let compVector = compEntry.totalVector.slice();
-    const defaultMerma = compIndex === 0 ? 40 : 15;
+    const defaultMerma = isAlgodon(matCompName) ? 40 : 15;
     const mermaEl = document.getElementById(`merma-m-${groupIndex}-${compIndex}`);
     let merma = mermaEl ? parseFloat(mermaEl.value) : NaN;
     if (isNaN(merma)) merma = defaultMerma;
