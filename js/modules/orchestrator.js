@@ -1,6 +1,6 @@
 // Orchestrator: Lógica de Negocio Principal (Mezclas y Crudos)
 (function(){
-    const v = 'v07';
+    const v = 'v08';
     const el = document.getElementById('appVersion');
     if (el) el.textContent = v;
     console.log('Orchestrator loaded - version', v);
@@ -25,8 +25,10 @@ function getStrictCanonicalToken(raw) {
     // 4. LÓGICA DE ALGODÓN CON CERTIFICACIONES (OCS vs GOTS)
     const isPima = u.includes('PIMA');
     const isTanguis = u.includes('TANGUIS');
+    const isUpland = u.includes('UPLAND');
     const isAlg = u.includes('ALGODON') || u.includes('COTTON') || u.includes('ALG');
     const isOrg = u.includes('ORG') || u.includes('ORGANICO');
+    const isBci = u.includes('BCI');
 
     // --- PRIORIDAD 1: GOTS (Certificación A) ---
     if (u.includes('GOTS')) {
@@ -51,7 +53,12 @@ function getStrictCanonicalToken(raw) {
         return 'ALGODON_ORG_GENERICO';
     }
 
-    // --- PRIORIDAD 4: CONVENCIONAL ---
+    // --- PRIORIDAD 4: BCI (No orgánico) ---
+    if (isBci) {
+        if (isTanguis || isUpland || isAlg) return 'UPLAND_BCI';
+    }
+
+    // --- PRIORIDAD 5: CONVENCIONAL ---
     if (isPima) return 'PIMA_NC';
     if (isTanguis) return 'TANGUIS_NC';
     if (isAlg) return 'ALGODON_NC';
@@ -813,7 +820,8 @@ function recalcAll() {
         if (strictToken === 'PIMA_NC') return 'ALGODÓN PIMA NC (QQ)';
         if (strictToken === 'TANGUIS_ORG_OCS') return 'ALGODÓN TANGUIS ORGANICO (OCS) (QQ)';
         if (strictToken === 'TANGUIS_ORG_GOTS') return 'ALGODÓN TANGUIS ORGANICO (GOTS) (QQ)';
-        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS NC BCI (QQ)';
+        if (strictToken === 'UPLAND_BCI' || strictToken === 'TANGUIS_BCI') return 'ALGODÓN UPLAND BCI (QQ)';
+        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS (QQ)';
         if (strictToken === 'ALGODON_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
         if (strictToken === 'ALGODON_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (strictToken === 'ALGODON_NC') return 'ALGODÓN UPLAND (QQ)';
@@ -844,7 +852,8 @@ function recalcAll() {
         if (u === 'PIMA_ORG_GOTS') return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
         if (u === 'ALG_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (u === 'ALG_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
-        if (u === 'TANGUIS_BCI') return 'ALGODÓN TANGUIS NC BCI (QQ)';
+        if (u === 'TANGUIS_BCI' || u === 'UPLAND_BCI') return 'ALGODÓN UPLAND BCI (QQ)';
+        if ((u.includes('TANGUIS') || u.includes('UPLAND')) && u.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
         if (u === 'UPLAND_USTCP') return 'ALGODÓN UPLAND USTCP (QQ)';
         if (u.includes('PIMA') && u.includes('ORGANICO')) {
              if(u.includes('GOTS')) return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
