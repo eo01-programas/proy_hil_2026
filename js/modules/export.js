@@ -159,6 +159,76 @@ function exportToExcel() {
         return aoa;
     }
 
+    function sanitizeAoa(aoa) {
+        if (!aoa || !aoa.length) return [];
+        const cleaned = aoa.map(row => (row || []).map(val => {
+            if (typeof val === 'string') {
+                const t = val.replace(/\s+/g, ' ').trim();
+                if (t === '→' || t === '->') return '';
+                return val;
+            }
+            return val;
+        }));
+        const maxCols = Math.max.apply(null, cleaned.map(r => r.length || 0));
+        const keepCols = [];
+        for (let c = 0; c < maxCols; c++) {
+            const colVals = cleaned.map(r => (r || [])[c]);
+            const headerVal = colVals.find(v => v !== null && typeof v !== 'undefined' && v !== '');
+            const headerTxt = headerVal ? toPlainText(headerVal) : '';
+            const allEmpty = colVals.every(v => v === '' || v === null || typeof v === 'undefined');
+            const allArrows = colVals.every(v => (typeof v === 'string' && v.trim() === '→') || v === '' || v === null || typeof v === 'undefined');
+            if (headerTxt.includes('MOVER')) continue;
+            if (allEmpty || allArrows) continue;
+            keepCols.push(c);
+        }
+        const trimmed = cleaned.map(row => {
+            if (!row || row.length === 0) return row;
+            if (row.length === 1) return row;
+            const next = keepCols.map(c => row[c]);
+            while (next.length && (next[next.length - 1] === '' || next[next.length - 1] === null || typeof next[next.length - 1] === 'undefined')) next.pop();
+            return next;
+        });
+        return trimmed.filter(r => r && r.some(v => v !== '' && v !== null && typeof v !== 'undefined'));
+    }
+
+    function filterAoaToMonth(aoa, monthIdx, includeTotalCol) {
+        if (!aoa || !aoa.length) return [];
+        const monthName = MONTH_NAMES[monthIdx];
+        let headerRowIdx = -1;
+        let monthCols = [];
+        let totalCol = -1;
+        for (let i = 0; i < aoa.length; i++) {
+            const row = aoa[i] || [];
+            const cols = getMonthColsFromHeaderRow(row);
+            if (cols.length > 0) { headerRowIdx = i; monthCols = cols; break; }
+        }
+        if (headerRowIdx === -1 || monthCols.length === 0) return aoa;
+        const header = aoa[headerRowIdx] || [];
+        for (let c = 0; c < header.length; c++) {
+            const txt = toPlainText(header[c]);
+            if (txt.includes('TOTAL')) { totalCol = c; break; }
+        }
+        const firstMonthCol = Math.min.apply(null, monthCols);
+        let targetMonthCol = -1;
+        for (let i = 0; i < monthCols.length; i++) {
+            if (toPlainText(header[monthCols[i]]) === monthName) { targetMonthCol = monthCols[i]; break; }
+        }
+        if (targetMonthCol === -1) targetMonthCol = monthCols[0];
+        const keepCols = [];
+        for (let c = 0; c < firstMonthCol; c++) keepCols.push(c);
+        keepCols.push(targetMonthCol);
+        if (includeTotalCol && totalCol >= 0 && !keepCols.includes(totalCol)) keepCols.push(totalCol);
+
+        const nextRows = aoa.map((row, idx) => {
+            if (!row || row.length <= 1) return row;
+            if (row.length <= Math.max.apply(null, keepCols)) return row;
+            const nr = keepCols.map(c => row[c]);
+            while (nr.length && (nr[nr.length - 1] === '' || nr[nr.length - 1] === null || typeof nr[nr.length - 1] === 'undefined')) nr.pop();
+            return nr;
+        });
+        return nextRows;
+    }
+
     function appendSection(targetRows, title, sectionRows) {
         if (!sectionRows || !sectionRows.length) return;
         if (targetRows.length > 0) targetRows.push([]);
@@ -171,7 +241,12 @@ function exportToExcel() {
         return [[fallbackTitle || 'Sin datos']];
     }
 
-    const monthIndices = Array.from({ length: 12 }, (_, i) => i);
+    const today = new Date();
+    const startMonthIdx = today.getMonth();
+    const monthIndices = Array.from({ length: 4 }, (_, i) => (startMonthIdx + i) % 12);
+    const visibleMonthIndices = (typeof activeIndices !== 'undefined' && Array.isArray(activeIndices) && activeIndices.length)
+        ? activeIndices.slice()
+        : Array.from({ length: 12 }, (_, i) => i);
 
     // =====================================================
     // 1) EXCEL COMPLETO (incluye hojas por mes: ENE..DIC)
@@ -399,47 +474,236 @@ function exportToExcel() {
     });
 
     // =====================================================
-    // 2) EXCEL RESUMEN (solo 4 hojas solicitadas)
+    // 2) EXCEL RESUMEN (solo hojas solicitadas)
     // =====================================================
     const wbResumen = XLSX.utils.book_new();
 
     const detalleRows = [];
-    appendSection(detalleRows, "DETALLE GRUPOS", extractTableAoa('groupsTable'));
-    appendSection(detalleRows, "RESUMEN GERENCIAL - CLIENTE", extractTableAoa('summaryClientTable'));
-    appendSection(detalleRows, "RESUMEN GERENCIAL - LINEA", extractTableAoa('summaryLineTable'));
+    appendSection(detalleRows, "DETALLE GRUPOS", sanitizeAoa(extractTableAoa('groupsTable')));
+    appendSection(detalleRows, "RESUMEN GERENCIAL - CLIENTE", sanitizeAoa(extractTableAoa('summaryClientTable')));
+    appendSection(detalleRows, "RESUMEN GERENCIAL - LINEA", sanitizeAoa(extractTableAoa('summaryLineTable')));
     const detalleRowsFinal = ensureRows(detalleRows, 'Detalle sin datos');
-    applyHorizontalTotalFormulas(detalleRowsFinal);
     const wsDetalle = XLSX.utils.aoa_to_sheet(detalleRowsFinal);
     wsDetalle['!cols'] = computeColumnWidths(detalleRowsFinal, 10, 50);
     applyNumericFormats(wsDetalle);
-    XLSX.utils.book_append_sheet(wbResumen, wsDetalle, "Detalle");
+    XLSX.utils.book_append_sheet(wbResumen, wsDetalle, "DETALLE");
 
-    const crudosRows = ensureRows(extractTableAoa('crudosTable'), 'Mat. crudos sin datos');
-    applyHorizontalTotalFormulas(crudosRows);
-    const wsCrudos = XLSX.utils.aoa_to_sheet(crudosRows);
-    wsCrudos['!cols'] = computeColumnWidths(crudosRows, 10, 50);
-    applyNumericFormats(wsCrudos);
-    XLSX.utils.book_append_sheet(wbResumen, wsCrudos, "Mat_crudos");
+    function buildCrudosSectionRows(monthIdxs) {
+        const rows = [];
+        rows.push(["MAT. CRUDOS"]);
+        const monthLabels = monthIdxs.map(i => MONTH_NAMES[i]);
+        (crudoGroups || []).forEach(group => {
+            const groupSum = monthIdxs.reduce((s, idx) => s + (parseFloat((group.columnTotals || [])[idx] || 0) || 0), 0);
+            if (Math.abs(groupSum) < 0.01) return;
+            rows.push([`MATERIAL: ${cleanMaterialTitle(group.title)}`]);
+            rows.push(["LINEA", "CLIENTE", "HILADO", ...monthLabels, "TOTAL"]);
+            let totalByMonth = monthIdxs.map(() => 0);
+            (group.rows || []).forEach(row => {
+                const r = [row.line, row.client, row.yarn];
+                let rowTotal = 0;
+                monthIdxs.forEach((idx, m) => {
+                    const v = parseFloat((row.values && row.values[idx]) || 0) || 0;
+                    r.push(v);
+                    rowTotal += v;
+                    totalByMonth[m] += v;
+                });
+                r.push(rowTotal);
+                rows.push(r);
+            });
+            const totalRow = ["", "", "TOTAL MES:"];
+            let totalSum = 0;
+            totalByMonth.forEach(v => { totalRow.push(v); totalSum += v; });
+            totalRow.push(totalSum);
+            rows.push(totalRow);
 
-    const mezclasRows = ensureRows(extractTableAoa('mezclasTable'), 'Mat. mezclas sin datos');
-    applyHorizontalTotalFormulas(mezclasRows);
-    const wsMezclas = XLSX.utils.aoa_to_sheet(mezclasRows);
-    wsMezclas['!cols'] = computeColumnWidths(mezclasRows, 10, 50);
-    applyNumericFormats(wsMezclas);
-    XLSX.utils.book_append_sheet(wbResumen, wsMezclas, "Mat_mezclas");
+            // KG REQ / QQ rows (usar merma por tipo de grupo)
+            const isCot = (typeof isAlgodon === 'function') ? isAlgodon(group.title) : false;
+            const merma = isCot ? 40 : 85;
+            const kgReqRow = ["", "", `KG REQ (Merma ${merma}%):`];
+            let kgReqTotal = 0;
+            totalByMonth.forEach(v => {
+                const req = (parseFloat(v) || 0) / (1 - (merma / 100));
+                kgReqRow.push(req);
+                kgReqTotal += req;
+            });
+            kgReqRow.push(kgReqTotal);
+            rows.push(kgReqRow);
+            if (isCot) {
+                const qqRow = ["", "", "QQ REQ:"];
+                let qqTotal = 0;
+                totalByMonth.forEach(v => {
+                    const req = (parseFloat(v) || 0) / (1 - (merma / 100));
+                    const qq = req / 46;
+                    qqRow.push(qq);
+                    qqTotal += qq;
+                });
+                qqRow.push(qqTotal);
+                rows.push(qqRow);
+            }
+            rows.push([]);
+        });
+        return rows;
+    }
 
-    const resumenRows = [];
-    appendSection(resumenRows, "RESUMEN", extractTableAoa('balanceTable'));
-    appendSection(resumenRows, "ALGODON (QQ)", extractTableAoa('algodonTable'));
-    appendSection(resumenRows, "OTRAS FIBRAS (KG REQ)", extractTableAoa('otrasTable'));
-    const resumenRowsFinal = ensureRows(resumenRows, 'Resumen sin datos');
-    applyHorizontalTotalFormulas(resumenRowsFinal);
-    const wsResumen = XLSX.utils.aoa_to_sheet(resumenRowsFinal);
-    wsResumen['!cols'] = computeColumnWidths(resumenRowsFinal, 10, 50);
-    applyNumericFormats(wsResumen);
-    XLSX.utils.book_append_sheet(wbResumen, wsResumen, "Resumen");
+    function buildMezclasSectionRows(monthIdxs) {
+        const rows = [];
+        rows.push(["MAT. MEZCLAS"]);
+        const monthLabels = monthIdxs.map(i => MONTH_NAMES[i]);
+        (mezclaGroups || []).forEach(group => {
+            const groupSum = monthIdxs.reduce((s, idx) => s + (parseFloat((group.groupRawTotals || [])[idx] || 0) || 0), 0);
+            if (Math.abs(groupSum) < 0.01) return;
+            rows.push([`MATERIAL: ${cleanMaterialTitle(group.title)}`]);
+            rows.push(["LINEA", "CLIENTE", "HILADO", ...monthLabels, "TOTAL"]);
+            let totalByMonth = monthIdxs.map(() => 0);
+            (group.uniqueYarns ? Array.from(group.uniqueYarns) : []).forEach(id => {
+                const it = (GLOBAL_ITEMS || []).find(x => x.id === id);
+                if (!it) return;
+                const r = [it.line, it.client, it.yarn];
+                let rowTotal = 0;
+                monthIdxs.forEach((idx, m) => {
+                    const v = parseFloat((it.values && it.values[idx]) || 0) || 0;
+                    r.push(v);
+                    rowTotal += v;
+                    totalByMonth[m] += v;
+                });
+                r.push(rowTotal);
+                rows.push(r);
+            });
+            const totalRow = ["", "", "TOTAL MES:"];
+            let totalSum = 0;
+            totalByMonth.forEach(v => { totalRow.push(v); totalSum += v; });
+            totalRow.push(totalSum);
+            rows.push(totalRow);
 
-    // Descargar ambos archivos
-    XLSX.writeFile(wb, "PCP_Gestion_Total_2026_Meses.xlsx");
-    XLSX.writeFile(wbResumen, "PCP_Gestion_Total_2026_Resumen.xlsx");
+            // KG REQ / QQ por componente (según componentTotalsTotal)
+            const compTotals = group.componentTotalsTotal || {};
+            const compList = Object.keys(compTotals).map(token => {
+                const vec = compTotals[token] || [];
+                const sum = monthIdxs.reduce((s, idx) => s + (parseFloat(vec[idx]) || 0), 0);
+                let label = token;
+                try {
+                    if (typeof getFiberNameFromStrict === 'function') label = getFiberNameFromStrict(token) || token;
+                } catch (e) { label = token; }
+                return { token, label, vec, sum };
+            }).filter(c => Math.abs(c.sum) > 0.01);
+            compList.sort((a, b) => b.sum - a.sum);
+
+            compList.forEach(comp => {
+                const isCot = (typeof isAlgodon === 'function') ? isAlgodon(comp.label || comp.token) : false;
+                const merma = isCot ? 40 : 15;
+                const kgReqRow = ["", "", `KG REQ ${comp.label} (Merma ${merma}%):`];
+                let kgReqTotal = 0;
+                monthIdxs.forEach((idx) => {
+                    const raw = parseFloat((comp.vec || [])[idx]) || 0;
+                    const req = raw / (1 - (merma / 100));
+                    kgReqRow.push(req);
+                    kgReqTotal += req;
+                });
+                kgReqRow.push(kgReqTotal);
+                rows.push(kgReqRow);
+
+                if (isCot) {
+                    const qqRow = ["", "", `QQ REQ ${comp.label}:`];
+                    let qqTotal = 0;
+                    monthIdxs.forEach((idx) => {
+                        const raw = parseFloat((comp.vec || [])[idx]) || 0;
+                        const req = raw / (1 - (merma / 100));
+                        const qq = req / 46;
+                        qqRow.push(qq);
+                        qqTotal += qq;
+                    });
+                    qqRow.push(qqTotal);
+                    rows.push(qqRow);
+                }
+            });
+
+            rows.push([]);
+        });
+        return rows;
+    }
+
+    function buildBalanceRows(monthIdxs) {
+        const rows = [];
+        rows.push(["RESUMEN"]);
+        const monthLabels = monthIdxs.map(i => MONTH_NAMES[i]);
+        rows.push(["CONCEPTO", ...monthLabels]);
+        const totalLineasVec = new Array(12).fill(0);
+        Object.keys(lineSummary || {}).forEach(l => { for (let k = 0; k < 12; k++) totalLineasVec[k] += (lineSummary[l].values[k] || 0); });
+        const crudoRawVec = (globalCrudoRaw && globalCrudoRaw.length) ? globalCrudoRaw.slice() : new Array(12).fill(0);
+        const mezclaRawVec = (globalMezclaRaw && globalMezclaRaw.length) ? globalMezclaRaw.slice() : new Array(12).fill(0);
+        const totalRawVec = crudoRawVec.map((v, i) => (v || 0) + (mezclaRawVec[i] || 0));
+
+        const pushRow = (label, vec) => {
+            const r = [label];
+            monthIdxs.forEach(idx => r.push(parseFloat(vec[idx] || 0) || 0));
+            rows.push(r);
+        };
+        pushRow("A. TOTAL DEMANDA (DETALLE):", totalLineasVec);
+        pushRow("B1. TOTAL PESO HILADOS - CRUDOS (BRUTO):", crudoRawVec);
+        pushRow("B2. TOTAL PESO HILADOS - MEZCLAS (BRUTO):", mezclaRawVec);
+        pushRow("B. TOTAL PESO HILADOS (CRUDOS+MEZCLAS BRUTO):", totalRawVec);
+        rows.push([]);
+        return rows;
+    }
+
+    function buildFiberTableRows(title, dataObj, orderedKeys, monthIdxs) {
+        const rows = [];
+        rows.push([title]);
+        const monthLabels = monthIdxs.map(i => MONTH_NAMES[i]);
+        rows.push(["FIBRA", ...monthLabels, "TOTAL"]);
+        let totalByMonth = monthIdxs.map(() => 0);
+        orderedKeys.forEach(fn => {
+            const d = (dataObj && dataObj[fn]) ? dataObj[fn] : { totalValues: new Array(12).fill(0) };
+            const r = [fn];
+            let rowTotal = 0;
+            monthIdxs.forEach((idx, m) => {
+                const v = parseFloat((d.totalValues && d.totalValues[idx]) || 0) || 0;
+                r.push(v);
+                rowTotal += v;
+                totalByMonth[m] += v;
+            });
+            r.push(rowTotal);
+            rows.push(r);
+        });
+        const totalRow = ["TOTAL GENERAL"];
+        let totalSum = 0;
+        totalByMonth.forEach(v => { totalRow.push(v); totalSum += v; });
+        totalRow.push(totalSum);
+        rows.push(totalRow);
+        rows.push([]);
+        return rows;
+    }
+
+    const combRows = [];
+    buildCrudosSectionRows(visibleMonthIndices).forEach(r => combRows.push(r));
+    buildMezclasSectionRows(visibleMonthIndices).forEach(r => combRows.push(r));
+    buildBalanceRows(visibleMonthIndices).forEach(r => combRows.push(r));
+    buildFiberTableRows("ALGODON (QQ)", detailAlgodon, ORDERED_COTTON_KEYS, visibleMonthIndices).forEach(r => combRows.push(r));
+    buildFiberTableRows("OTRAS FIBRAS (KG REQ)", detailOtras, ORDERED_OTHER_KEYS, visibleMonthIndices).forEach(r => combRows.push(r));
+
+    const combRowsFinal = ensureRows(combRows, 'Combinación sin datos');
+    const wsComb = XLSX.utils.aoa_to_sheet(combRowsFinal);
+    wsComb['!cols'] = computeColumnWidths(combRowsFinal, 10, 50);
+    applyNumericFormats(wsComb);
+    XLSX.utils.book_append_sheet(wbResumen, wsComb, "COMBINACION");
+
+    // Hojas por mes: mes actual + 3 siguientes, con RESUMEN segmentado por mes
+    const resumenBase = sanitizeAoa(extractTableAoa('balanceTable'));
+    const algodonBase = sanitizeAoa(extractTableAoa('algodonTable'));
+    const otrasBase = sanitizeAoa(extractTableAoa('otrasTable'));
+
+    monthIndices.forEach(idx => {
+        const wsRows = [];
+        appendSection(wsRows, `RESUMEN - ${MONTH_NAMES[idx]}`, filterAoaToMonth(resumenBase, idx, false));
+        appendSection(wsRows, "ALGODON (QQ)", filterAoaToMonth(algodonBase, idx, false));
+        appendSection(wsRows, "OTRAS FIBRAS (KG REQ)", filterAoaToMonth(otrasBase, idx, false));
+        const finalRows = ensureRows(wsRows, 'Resumen sin datos');
+        const ws = XLSX.utils.aoa_to_sheet(finalRows);
+        ws['!cols'] = computeColumnWidths(finalRows, 10, 50);
+        applyNumericFormats(ws);
+        XLSX.utils.book_append_sheet(wbResumen, ws, `RESUMEN_${MONTH_NAMES[idx]}`);
+    });
+
+    // Descargar archivo final
+    XLSX.writeFile(wbResumen, "Proyeccion_resumen.xlsx");
 }
