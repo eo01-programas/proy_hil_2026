@@ -1103,7 +1103,13 @@ function resetFiberDetailPanel() {
     const panel = document.getElementById('fiberDetailPanel');
     if (panel) panel.classList.add('hidden');
     const header = document.getElementById('fiberDetailHeader');
-    if (header) header.textContent = '';
+    if (header) {
+    const countParts = [];
+    if (typeof sourceCounts['MAT. CRUDOS'] !== 'undefined') countParts.push(`MAT. CRUDOS: ${sourceCounts['MAT. CRUDOS']}`);
+    if (typeof sourceCounts['MAT. MEZCLAS'] !== 'undefined') countParts.push(`MAT. MEZCLAS: ${sourceCounts['MAT. MEZCLAS']}`);
+    const countText = countParts.length ? (' - ' + countParts.join(' - ')) : '';
+    header.textContent = `${fiberName} - ${client} - ${monthLabel}${countText}`;
+}
     const select = document.getElementById('fiberDetailSourceFilter');
     if (select) select.innerHTML = '<option value="ALL">TODOS</option>';
     const table = document.getElementById('fiberDetailContribTable');
@@ -1116,19 +1122,21 @@ function resetFiberDetailPanel() {
 function wireFiberModalCellClicks() {
     const body = document.getElementById('fiberDetailBody');
     if (!body) return;
-    const buttons = body.querySelectorAll('.fiber-cell-btn');
-    for (let i = 0; i < buttons.length; i++) {
-        buttons[i].onclick = function() {
-            try {
-                const fiber = this.getAttribute('data-fiber') || '';
-                const client = this.getAttribute('data-client') || '';
-                const monthIdx = parseInt(this.getAttribute('data-month') || '0', 10);
-                const val = parseFloat(this.getAttribute('data-value') || '0') || 0;
-                const isAlgodon = (this.getAttribute('data-isalgodon') || '0') === '1';
-                showFiberCellDetail(fiber, client, monthIdx, val, isAlgodon);
-            } catch (e) { console.warn('Detalle celda error', e); }
-        };
-    }
+    // Use event delegation so clicks always work after re-renders
+    if (body._fiberClickBound) return;
+    body._fiberClickBound = true;
+    body.addEventListener('click', function(evt) {
+        const btn = evt.target && evt.target.closest ? evt.target.closest('.fiber-cell-btn') : null;
+        if (!btn || !body.contains(btn)) return;
+        try {
+            const fiber = btn.getAttribute('data-fiber') || '';
+            const client = btn.getAttribute('data-client') || '';
+            const monthIdx = parseInt(btn.getAttribute('data-month') || '0', 10);
+            const val = parseFloat(btn.getAttribute('data-value') || '0') || 0;
+            const isAlgodon = (btn.getAttribute('data-isalgodon') || '0') === '1';
+            showFiberCellDetail(fiber, client, monthIdx, val, isAlgodon);
+        } catch (e) { console.warn('Detalle celda error', e); }
+    });
 }
 
 function showFiberCellDetail(fiberName, client, monthIdx, displayedVal, isAlgodon) {
@@ -1149,25 +1157,31 @@ function showFiberCellDetail(fiberName, client, monthIdx, displayedVal, isAlgodo
         });
     }
 
-    let sumVal = 0;
+    // Normalize source labels for display
+    const sourceLabelMap = { 'CRUDOS': 'MAT. CRUDOS', 'MEZCLA': 'MAT. MEZCLAS', 'MEZCLAS': 'MAT. MEZCLAS' };
+    rows.forEach(r => { if (sourceLabelMap[r.source]) r.source = sourceLabelMap[r.source]; });
+
+    // Count components per source (for filter labels and header info)
+    const sourceCounts = {};
     rows.forEach(r => {
-        const v = isAlgodon ? (parseFloat(r.qq) || 0) : (parseFloat(r.req) || 0);
-        sumVal += v;
+        const s = r.source || '';
+        if (!s) return;
+        sourceCounts[s] = (sourceCounts[s] || 0) + 1;
     });
-    const diff = (parseFloat(displayedVal) || 0) - sumVal;
-    if (Math.abs(diff) > 0.0001) {
-        rows.push({
-            source: 'DIFERENCIA',
-            groupTitle: '',
-            yarn: '(No asignado)',
-            type: '',
-            raw: 0,
-            pct: 0,
-            contrib: 0,
-            req: isAlgodon ? 0 : diff,
-            qq: isAlgodon ? diff : 0
+    // Console validation (no UI row)
+    try {
+        let sumVal = 0;
+        rows.forEach(r => {
+            const v = isAlgodon ? (parseFloat(r.qq) || 0) : (parseFloat(r.req) || 0);
+            sumVal += v;
         });
-    }
+        const diff = (parseFloat(displayedVal) || 0) - sumVal;
+        if (rows.length === 0 && Math.abs(parseFloat(displayedVal) || 0) > 0.0001) {
+            console.warn('Detalle vacío para celda', { fiberName, client, monthIdx, displayedVal });
+        } else if (Math.abs(diff) > 0.0001) {
+            console.warn('Discrepancia detalle vs valor mostrado', { fiberName, client, monthIdx, displayedVal, sumVal, diff });
+        }
+    } catch (e) { /* ignore */ }
 
     const monthLabel = (MONTH_NAMES && MONTH_NAMES[monthIdx]) ? MONTH_NAMES[monthIdx] : ('M' + (monthIdx + 1));
     FIBER_DETAIL_CTX = {
@@ -1177,20 +1191,34 @@ function showFiberCellDetail(fiberName, client, monthIdx, displayedVal, isAlgodo
         monthLabel: monthLabel,
         displayedVal: displayedVal,
         isAlgodon: !!isAlgodon,
-        rows: rows
+        rows: rows,
+        sourceCounts: sourceCounts
     };
 
     const panel = document.getElementById('fiberDetailPanel');
-    if (panel) panel.classList.remove('hidden');
+    if (panel) {
+        panel.classList.remove('hidden');
+        try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* ignore */ }
+    }
     const header = document.getElementById('fiberDetailHeader');
-    if (header) header.textContent = `${fiberName} — ${client} — ${monthLabel}`;
+    if (header) {
+        const countParts = [];
+        if (typeof sourceCounts['MAT. CRUDOS'] !== 'undefined') countParts.push(`MAT. CRUDOS: ${sourceCounts['MAT. CRUDOS']} comp.`);
+        if (typeof sourceCounts['MAT. MEZCLAS'] !== 'undefined') countParts.push(`MAT. MEZCLAS: ${sourceCounts['MAT. MEZCLAS']} comp.`);
+        const countText = countParts.length ? (' - ' + countParts.join(' - ')) : '';
+        header.textContent = `${fiberName} - ${client} - ${monthLabel}${countText}`;
+    }
 
     const select = document.getElementById('fiberDetailSourceFilter');
     if (select) {
         const sources = {};
         rows.forEach(r => { if (r.source) sources[r.source] = true; });
         let options = '<option value="ALL">TODOS</option>';
-        Object.keys(sources).forEach(s => { options += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+        Object.keys(sources).forEach(s => {
+            const count = (sourceCounts && typeof sourceCounts[s] !== 'undefined') ? sourceCounts[s] : 0;
+            const label = count ? `${s} (${count} comp.)` : s;
+            options += `<option value="${escapeHtml(s)}">${escapeHtml(label)}</option>`;
+        });
         select.innerHTML = options;
         select.onchange = function() { renderFiberDetailPanel(); };
     }
@@ -1263,7 +1291,145 @@ function renderFiberDetailPanel() {
 }
 
 // Build contributors for a given fiber/client/month
+function getAssignedContributors(fiberName, client, monthIdx, isAlgodon) {
+    try {
+        const sourceMap = isAlgodon ? (typeof detailAlgodon !== 'undefined' ? detailAlgodon : null) : (typeof detailOtras !== 'undefined' ? detailOtras : null);
+        if (!sourceMap) return null;
+        // Resolve key (fiberName may be escaped)
+        let fiberKey = sourceMap[fiberName] ? fiberName : null;
+        if (!fiberKey) {
+            const normalizeForCompare = (s) => {
+                if (s == null) return '';
+                try { return stripDiacritics(s.toString().toUpperCase()).replace(/[^A-Z0-9]/g, ''); }
+                catch (e) { return s.toString().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+            };
+            const normTarget = normalizeForCompare(fiberName);
+            fiberKey = Object.keys(sourceMap).find(k => normalizeForCompare(k) === normTarget) || null;
+        }
+        if (!fiberKey) return null;
+        const data = sourceMap[fiberKey] || {};
+        const contributors = [];
+
+        // Helpers to parse pct from yarn if missing
+        const extractPctListFromYarn = (itYarn) => {
+            try {
+                if (!itYarn) return null;
+                const s = itYarn.toString();
+                const m = s.match(/(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s*%/);
+                if (!m) return null;
+                const pctBlock = m[1].trim();
+                return pctBlock.split('/').map(p => { const v = parseFloat(p.trim()); return isNaN(v) ? null : v / 100; }).filter(x => x !== null);
+            } catch (e) { return null; }
+        };
+        const findComponentIndex = (yarn, targetFiber) => {
+            try {
+                if (!yarn) return -1;
+                let yarnStr = yarn.toString().replace(/^\s*\d+\/\d+\s*/,'').trim();
+                yarnStr = yarnStr.replace(/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*%)/,'').trim();
+                const comps = yarnStr.split('/').map(c => c.trim()).filter(c => c.length > 0);
+                const targetU = (targetFiber || '').toString().toUpperCase();
+                let keywords = [];
+                if (/WOOL|MERINO/.test(targetU)) keywords = ['WOOL', 'MERINO'];
+                else if (/LYOCELL|TENCEL/.test(targetU)) keywords = ['LYOCELL', 'TENCEL'];
+                else if (/MODAL/.test(targetU)) keywords = ['MODAL'];
+                else if (/VISCOSA|VISCOSE|RAYON/.test(targetU)) keywords = ['VISCOSA', 'VISCOSE', 'RAYON'];
+                else if (/PES|REPREVE|PREPREVE/.test(targetU)) keywords = ['PES', 'REPREVE', 'PREPREVE'];
+                else if (/ELASTANO|ELASTANE|SPANDEX|LYCRA/.test(targetU)) keywords = ['ELASTANO', 'ELASTANE', 'SPANDEX', 'LYCRA'];
+                else if (/HEMP|CAÑAMO|CANAMO/.test(targetU)) keywords = ['HEMP', 'CAÑAMO', 'CANAMO'];
+                else if (/ABETE/.test(targetU)) keywords = ['ABETE'];
+                else keywords = [targetU];
+
+                for (let ci = 0; ci < comps.length; ci++) {
+                    const compU = (comps[ci] || '').toUpperCase();
+                    for (const kw of keywords) {
+                        if (compU.includes(kw)) return ci;
+                    }
+                }
+                return -1;
+            } catch (e) { return -1; }
+        };
+        const findPctFromGroup = (groupTitle, targetFiber) => {
+            try {
+                const groups = (window.mezclaGroups || mezclaGroups || []);
+                const g = groups.find(gg => (gg && gg.title && gg.title.toString && gg.title.toString() === groupTitle));
+                if (!g || !g.componentPercentages) return null;
+                const normalizeForCompare = (s) => {
+                    if (s == null) return '';
+                    try { return stripDiacritics(s.toString().toUpperCase()).replace(/[^A-Z0-9]/g, ''); }
+                    catch (e) { return s.toString().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+                };
+                const normTarget = normalizeForCompare(targetFiber);
+                let pct = null;
+                Object.keys(g.componentPercentages || {}).some(compToken => {
+                    const pretty = (typeof getFiberNameFromStrict === 'function') ? getFiberNameFromStrict(compToken) : compToken;
+                    const normPretty = normalizeForCompare(pretty);
+                    const normToken = normalizeForCompare(compToken);
+                    if (normPretty === normTarget || normToken === normTarget) {
+                        pct = parseFloat(g.componentPercentages[compToken]) || null;
+                        return true;
+                    }
+                    return false;
+                });
+                return pct;
+            } catch (e) { return null; }
+        };
+
+        const crudoRows = data.crudoRows || [];
+        crudoRows.forEach(row => {
+            try {
+                if (!row) return;
+                if ((row.client || '') !== client) return;
+                const raw = parseFloat(row.values && row.values[monthIdx] ? row.values[monthIdx] : 0) || 0;
+                if (Math.abs(raw) < 0.0001) return;
+                const isHTR = (row.yarn || '').toString().toUpperCase().includes('HTR') || !!row._isHTR;
+                const merma = isHTR ? 0 : (isAlgodon ? 40 : (typeof defaultMermaForToken === 'function' ? defaultMermaForToken(row.yarn || '') : 15));
+                const req = raw / (1 - merma/100);
+                const qq = isAlgodon ? (req / 46) : null;
+                contributors.push({ source: 'MAT. CRUDOS', groupTitle: row.groupTitle, type: isHTR ? 'HTR' : 'BASE', id: row.id, yarn: row.yarn, line: row.line, raw: raw, req: req, qq: qq });
+            } catch (e) { /* ignore row */ }
+        });
+
+        const mezclaItems = data.mezclaItems || [];
+        mezclaItems.forEach(it => {
+            try {
+                if (!it) return;
+                if ((it.client || '') !== client) return;
+                const raw = parseFloat(it.values && it.values[monthIdx] ? it.values[monthIdx] : 0) || 0;
+                if (Math.abs(raw) < 0.0001) return;
+                const isHTR = (it.yarn || '').toString().toUpperCase().includes('HTR') || !!it._isHTR;
+                let pctVal = (typeof it.pct === 'number' && it.pct > 0) ? it.pct : null;
+                if (pctVal === null) {
+                    const pctList = extractPctListFromYarn(it.yarn);
+                    if (Array.isArray(pctList) && pctList.length > 0) {
+                        const compIdx = findComponentIndex(it.actualComponentName || it.yarn, fiberKey);
+                        if (compIdx >= 0 && compIdx < pctList.length) pctVal = pctList[compIdx];
+                    }
+                }
+                if (pctVal === null) {
+                    const pctFromGroup = findPctFromGroup(it.groupTitle || '', fiberKey);
+                    if (pctFromGroup !== null && !isNaN(pctFromGroup)) pctVal = pctFromGroup;
+                }
+                const effectivePct = (pctVal !== null && !isNaN(pctVal) && pctVal > 0) ? pctVal : 1;
+                const componentRaw = raw * effectivePct;
+                const mermaToken = isAlgodon ? (it.yarn || '') : (it.actualComponentName || fiberKey || it.yarn || '');
+                const merma = isHTR ? 0 : (isAlgodon ? 40 : (typeof defaultMermaForToken === 'function' ? defaultMermaForToken(mermaToken) : 15));
+                const req = componentRaw / (1 - merma/100);
+                const qq = isAlgodon ? (req / 46) : null;
+                contributors.push({ source: 'MAT. MEZCLAS', groupTitle: it.groupTitle, type: isHTR ? 'HTR' : 'BASE', itemId: it.id, yarn: it.yarn, rawItem: raw, pct: pctVal, contrib: componentRaw, req: req, qq: qq });
+            } catch (e) { /* ignore item */ }
+        });
+
+        return contributors;
+    } catch (e) {
+        return null;
+    }
+}
+
 function getTraceContributors(fiberDisplay, client, monthIdx, isAlgodon) {
+    // Prefer assigned contributors so the modal matches the table values exactly
+    const assigned = getAssignedContributors(fiberDisplay, client, monthIdx, isAlgodon);
+    if (assigned && assigned.length) return assigned;
+
     const contributors = [];
     // Helper to match fiber: normalize strings (remove diacritics, non-alnum) for robust comparison
     const normalizeForCompare = (s) => {
@@ -3492,6 +3658,12 @@ function logOtherFiberDetail(fiberLabel) {
         console.group(`%c${fiberLabel}`, 'font-weight:bold;color:#007acc');
 
         let totalKgReqAllMonths = 0;
+        const rebuiltClients = {};
+        const ensureClient = (c) => {
+            const key = (c && c.toString) ? c.toString() : 'VARIOS';
+            if (!rebuiltClients[key]) rebuiltClients[key] = new Array(12).fill(0);
+            return key;
+        };
 
         const formatLogNumber = (n) => {
             const num = parseFloat(n || 0) || 0;
@@ -3537,6 +3709,8 @@ function logOtherFiberDetail(fiberLabel) {
                         const kgReq = raw / (1 - (parseFloat(mermaPct) || 0)/100);
                         const qqReq = kgReq / 46;
                         gKgReq += kgReq; gQQReq += qqReq; gRaw += raw;
+                        const clientKey = ensureClient(row.client || 'VARIOS');
+                        rebuiltClients[clientKey][monthIdx] += kgReq;
                         console.log(`  [${idx+1}] Yarn: ${row.yarn} | Cliente: ${row.client || '-'} | Línea: ${row.line || '-'} | Raw: ${formatLogNumber(raw)} kg → KgReq: ${formatLogNumber(kgReq)} → QQ: ${formatLogNumber(qqReq)} (merma ${mermaPct}%)`);
                     });
                     console.log(`  %c↳ Subtotal grupo: Raw: ${formatLogNumber(gRaw)} kg → KgReq: ${formatLogNumber(gKgReq)} kg → ${formatLogNumber(gQQReq)} QQ`, 'color:#4ec9b0');
@@ -3641,6 +3815,8 @@ function logOtherFiberDetail(fiberLabel) {
                         const mermaPct = (typeof defaultMermaForToken === 'function') ? defaultMermaForToken(fiberLabel || '') : 15;
                         const kgReq = componentRaw / (1 - (parseFloat(mermaPct) || 0)/100);
                         gKgReq += kgReq;
+                        const clientKey = ensureClient(it.client || 'VARIOS');
+                        rebuiltClients[clientKey][monthIdx] += kgReq;
 
                         // Log SIN QQ (QQ solo para algodón): Raw × Pct → ComponentRaw → KgReq
                         if (pct !== null && pct < 1) {
@@ -3671,6 +3847,12 @@ function logOtherFiberDetail(fiberLabel) {
             totalKgReqAllMonths += (typeof displayedTotalKg === 'number' ? displayedTotalKg : 0);
         }
 
+        // Rebuild per-client values to align with the recalculated totals
+        if (data && rebuiltClients && Object.keys(rebuiltClients).length > 0) {
+            data.clients = rebuiltClients;
+        }
+
+
         console.log(`%c═══════════════════════════════════════════════`, 'color:#999;');
         console.log(`%cSUMA TOTAL KG REQ (12 meses): ${formatLogNumber(totalKgReqAllMonths)} kg`, `color:${colorBg};font-weight:bold;font-size:13px;`);
         console.groupEnd();
@@ -3678,3 +3860,5 @@ function logOtherFiberDetail(fiberLabel) {
         console.warn(`logOtherFiberDetail("${fiberLabel}") error:`, e);
     }
 }
+
+
