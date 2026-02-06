@@ -362,6 +362,9 @@ function cleanImportedName(yarnRaw, clientRaw) {
         s = s.replace(/\s+/g, ' ').trim();
     }
 
+    // Normalizar acentos en ORGÁNICO/ORGÁNICA para evitar cortes como "ORG (OCS)ÁNICO"
+    s = s.replace(/ORGÁNICO/gi, 'ORGANICO').replace(/ORGÁNICA/gi, 'ORGANICA');
+
     // REGLA 4: Si contiene TANGUIS y BCI, reemplazar TANGUIS -> UPLAND y quitar NC
     if (/\bTANGUIS\b/i.test(s) && /\bBCI\b/i.test(s)) {
         s = s.replace(/\bTANGUIS\b/gi, 'UPLAND');
