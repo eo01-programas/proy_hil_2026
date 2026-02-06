@@ -1050,7 +1050,7 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
         for (let i = 0; i < 12; i++) {
             const val = values[i] || 0; totals[i] += val;
             if (Math.abs(parseFloat(val || 0)) > 0.0001) {
-                row += `<td class="border px-3 py-2 text-right"><button type="button" class="fiber-cell-btn" data-fiber="${escapeHtml(fiberName)}" data-client="${escapeHtml(client)}" data-month="${i}" data-value="${val}" data-isalgodon="${isAlgodon ? 1 : 0}">${formatNumber(val)}</button></td>`;
+                row += `<td class="border px-3 py-2 text-right"><button type="button" class="fiber-cell-btn" onclick="onFiberCellClick(this)" data-fiber="${escapeHtml(fiberName)}" data-client="${escapeHtml(client)}" data-month="${i}" data-value="${val}" data-isalgodon="${isAlgodon ? 1 : 0}">${formatNumber(val)}</button></td>`;
             } else {
                 row += `<td class="border px-3 py-2 text-right text-slate-400">-</td>`;
             }
@@ -1137,6 +1137,19 @@ function wireFiberModalCellClicks() {
             showFiberCellDetail(fiber, client, monthIdx, val, isAlgodon);
         } catch (e) { console.warn('Detalle celda error', e); }
     });
+}
+
+// Fallback handler for inline onclick to ensure detail always opens
+function onFiberCellClick(btn) {
+    try {
+        if (!btn) return;
+        const fiber = btn.getAttribute('data-fiber') || '';
+        const client = btn.getAttribute('data-client') || '';
+        const monthIdx = parseInt(btn.getAttribute('data-month') || '0', 10);
+        const val = parseFloat(btn.getAttribute('data-value') || '0') || 0;
+        const isAlgodon = (btn.getAttribute('data-isalgodon') || '0') === '1';
+        showFiberCellDetail(fiber, client, monthIdx, val, isAlgodon);
+    } catch (e) { console.warn('Detalle celda error', e); }
 }
 
 function showFiberCellDetail(fiberName, client, monthIdx, displayedVal, isAlgodon) {
@@ -1270,23 +1283,11 @@ function renderFiberDetailPanel() {
     const table = document.getElementById('fiberDetailContribTable');
     if (table) table.innerHTML = html;
 
-    // Dropdown list (collapsible)
+    // Dropdown list removed to avoid duplicate detail view
     const list = document.getElementById('fiberDetailDropdownList');
     if (list) {
-        let listHtml = '';
-        rows.forEach(r => {
-            const mainVal = FIBER_DETAIL_CTX.isAlgodon ? (r.qq || 0) : (r.req || 0);
-            const title = `${r.source || ''} — ${r.yarn || ''} — ${formatNumber(mainVal)}`;
-            listHtml += `<details class="fiber-detail-item"><summary>${escapeHtml(title)}</summary>`;
-            listHtml += `<div class="fiber-detail-item-body">`;
-            listHtml += `<div><strong>Grupo:</strong> ${escapeHtml(r.groupTitle || '-')}</div>`;
-            listHtml += `<div><strong>Raw:</strong> ${formatNumber(r.raw || 0)}</div>`;
-            listHtml += `<div><strong>%:</strong> ${r.pct ? (Math.round((r.pct || 0) * 100) + '%') : '-'}</div>`;
-            listHtml += `<div><strong>Contrib:</strong> ${formatNumber(r.contrib || 0)}</div>`;
-            listHtml += `<div><strong>${FIBER_DETAIL_CTX.isAlgodon ? 'QQ' : 'KG REQ'}:</strong> ${formatNumber(mainVal)}</div>`;
-            listHtml += `</div></details>`;
-        });
-        list.innerHTML = listHtml || '<div class="text-sm text-slate-500">Sin contenido.</div>';
+        list.classList.add('hidden');
+        list.innerHTML = '';
     }
 }
 
@@ -3860,5 +3861,3 @@ function logOtherFiberDetail(fiberLabel) {
         console.warn(`logOtherFiberDetail("${fiberLabel}") error:`, e);
     }
 }
-
-
