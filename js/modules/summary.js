@@ -100,7 +100,7 @@ function renderBalanceView() {
         const orderedFibers = [
             { label: 'ALGODÓN PIMA NC (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||'');if(!a.includes('PIMA')) return false; if(a.includes('OCS')||a.includes('GOTS')||a.includes('ORGANICO')||a.includes('ORGANIC')||a.includes('ORG')||a.includes('CERT')) return false; if(t.includes('OCS')||t.includes('GOTS')||t.includes('ORGANICO')||t.includes('ORGANIC')) return false; return true; } },
             { label: 'ALGODÓN PIMA ORGANICO - OCS (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); if(!a.includes('PIMA')) return false; if(a.includes('GOTS')||t.includes('GOTS')) return false; if(!(a.includes('OCS')||t.includes('OCS'))) return false; return true; } },
-            { label: 'ALGODÓN TANGUIS NC BCI (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); if(!a.includes('TANGUIS') && !t.includes('TANGUIS')) return false; if(!a.includes('BCI') && !t.includes('BCI')) return false; if(a.includes('OCS')||a.includes('GOTS')||a.includes('ORGANICO')||a.includes('ORGANIC')) return false; return true; } },
+            { label: 'ALGODÓN UPLAND BCI (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); const hasTanguis = a.includes('TANGUIS') || t.includes('TANGUIS'); const hasUpland = a.includes('UPLAND') || t.includes('UPLAND'); if(!hasTanguis && !hasUpland) return false; if(!a.includes('BCI') && !t.includes('BCI')) return false; if(a.includes('OCS')||a.includes('GOTS')||a.includes('ORGANICO')||a.includes('ORGANIC')) return false; return true; } },
             { label: 'ALGODÓN ORGANICO - GOTS (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); if(a.includes('PIMA')||t.includes('PIMA')) return false; if(a.includes('OCS')||t.includes('OCS')) return false; if(!a.includes('GOTS') && !t.includes('GOTS')) return false; return true; } },
             { label: 'ALGODÓN ORGANICO - OCS (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); if(a.includes('PIMA')||t.includes('PIMA')) return false; if(a.includes('GOTS')||t.includes('GOTS')) return false; if(!a.includes('OCS') && !t.includes('OCS')) return false; return true; } },
             { label: 'ALGODÓN UPLAND USTCP (QQ)', matcher: (y,g)=>{const a=normStrFiber(y);const t=normStrFiber(g||''); if(a.includes('USTCP')||a.includes('US TCP')||t.includes('USTCP')||t.includes('US TCP')) return true; return false; } },
@@ -543,7 +543,11 @@ function validateCottonAssignments() {
             
             // Detectar TANGUIS
             if (yarnUpper.includes('TANGUIS')) {
-                componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN TANGUIS NC BCI (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
+                if (yarnUpper.includes('BCI')) {
+                    componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN UPLAND BCI (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
+                } else {
+                    componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN TANGUIS (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
+                }
             }
             
             // Detectar UPLAND
@@ -699,9 +703,9 @@ function determineCottonKey(yarn, groupTitle) {
             return keys.find(k => k.toUpperCase().includes('PIMA') && k.toUpperCase().includes('OCS')) || keys[keys.length-1];
         }
         
-        // TANGUIS BCI: TANGUIS + BCI
-        if (combined.includes('TANGUIS') && combined.includes('BCI')) {
-            return keys.find(k => k.toUpperCase().includes('TANGUIS')) || keys[keys.length-1];
+        // UPLAND BCI: TANGUIS/UPLAND + BCI
+        if ((combined.includes('TANGUIS') || combined.includes('UPLAND')) && combined.includes('BCI')) {
+            return keys.find(k => k.toUpperCase().includes('BCI')) || keys[keys.length-1];
         }
         
         // GOTS (genérico, sin PIMA): GOTS + sin PIMA + sin OCS
@@ -2441,18 +2445,20 @@ function logPimaNcAllMonths() {
     logFiberDetailAllMonths('ALGODÓN PIMA NC (QQ)', matcher, 0.40);
 }
 
-// ALGODÓN TANGUIS NC BCI (QQ) - TANGUIS con BCI, sin certificación orgánica
+// ALGODÓN UPLAND BCI (QQ) - TANGUIS/UPLAND con BCI, sin certificación orgánica
 function logTanguisBciAllMonths() {
     const matcher = (yarn, groupTitle) => {
         const a = normStrFiber(yarn);
         const t = normStrFiber(groupTitle || '');
-        if (!a.includes('TANGUIS') && !t.includes('TANGUIS')) return false;
+        const hasTanguis = a.includes('TANGUIS') || t.includes('TANGUIS');
+        const hasUpland = a.includes('UPLAND') || t.includes('UPLAND');
+        if (!hasTanguis && !hasUpland) return false;
         if (!a.includes('BCI') && !t.includes('BCI')) return false;
         if (a.includes('OCS') || a.includes('GOTS') || a.includes('ORGANICO') || a.includes('ORGANIC')) return false;
         if (t.includes('OCS') || t.includes('GOTS') || t.includes('ORGANICO') || t.includes('ORGANIC')) return false;
         return true;
     };
-    logFiberDetailAllMonths('ALGODÓN TANGUIS NC BCI (QQ)', matcher, 0.40);
+    logFiberDetailAllMonths('ALGODÓN UPLAND BCI (QQ)', matcher, 0.40);
 }
 
 // ALGODÓN ORGANICO - GOTS (QQ) - Orgánico GOTS (no PIMA específico)
@@ -2630,7 +2636,7 @@ function logAllCottonFibersDetail() {
     const orderedLabels = [
         'ALGODÓN PIMA NC (QQ)',
         'ALGODÓN PIMA ORGANICO - OCS (QQ)',
-        'ALGODÓN TANGUIS NC BCI (QQ)',
+        'ALGODÓN UPLAND BCI (QQ)',
         'ALGODÓN ORGANICO - GOTS (QQ)',
         'ALGODÓN ORGANICO - OCS (QQ)',
         'ALGODÓN UPLAND USTCP (QQ)',
