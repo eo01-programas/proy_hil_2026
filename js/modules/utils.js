@@ -4,7 +4,7 @@ const MONTH_NAMES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SE
 const ORDERED_COTTON_KEYS = [
     "ALGODÓN PIMA NC (QQ)",
     "ALGODÓN PIMA ORGANICO - OCS (QQ)",
-    "ALGODÓN TANGUIS NC BCI (QQ)",
+    "ALGODÓN UPLAND BCI (QQ)",
     "ALGODÓN ORGANICO - GOTS (QQ)",
     "ALGODÓN ORGANICO - OCS (QQ)",
     "ALGODÓN UPLAND USTCP (QQ)",
@@ -226,7 +226,7 @@ function getNormalizedComponent(rawName) {
     if (u.includes('ORGANICO') && u.includes('GOTS')) return 'ALG_ORG_GOTS';
     if (u.includes('ORGANICO') && u.includes('OCS')) return 'ALG_ORG_OCS';
     if (u.includes('ORGANICO')) return 'ALG_ORG';
-    if (u.includes('TANGUIS') && u.includes('BCI')) return 'TANGUIS_BCI';
+    if ((u.includes('TANGUIS') || u.includes('UPLAND')) && u.includes('BCI')) return 'UPLAND_BCI';
     if (u.includes('UPLAND') && u.includes('USTCP')) return 'UPLAND_USTCP';
         u = u.replace(/\bSTD\b/g, '').replace(/\bHTR\b/g, '').replace(/\bHEATHER\b/g, '').replace(/\bNC\b/g, '').replace(/\bOCS\b/g, '')
             .replace(/\bGOTS\b/g, '').replace(/\bBCI\b/g, '').replace(/\bUSTCP\b/g, '')
@@ -361,6 +361,12 @@ function cleanImportedName(yarnRaw, clientRaw) {
         s = s.replace(/\bTENCELL\b/gi, 'LYOCELL A100');
         s = s.replace(/\s+/g, ' ').trim();
     }
+
+    // REGLA 4: Si contiene TANGUIS y BCI, reemplazar TANGUIS -> UPLAND y quitar NC
+    if (/\bTANGUIS\b/i.test(s) && /\bBCI\b/i.test(s)) {
+        s = s.replace(/\bTANGUIS\b/gi, 'UPLAND');
+        s = s.replace(/\bNC\b/gi, '').replace(/\s+/g, ' ').trim();
+    }
     
     const orgRegex = /\b(ORGANICO|ORGANIC|ORG\.?)/gi;
     if (orgRegex.test(s)) {
@@ -401,6 +407,12 @@ function cleanMaterialTitle(title) {
         s = s.replace(/\bTENCEL\b/gi, 'LYOCELL A100');
         s = s.replace(/\bTENCELL\b/gi, 'LYOCELL A100');
     }
+
+    // TANGUIS + BCI => UPLAND BCI (display)
+    if (/\bTANGUIS\b/i.test(s) && /\bBCI\b/i.test(s)) {
+        s = s.replace(/\bTANGUIS\b/gi, 'UPLAND');
+        s = s.replace(/\bNC\b/gi, '').replace(/\s+/g, ' ').trim();
+    }
     
     return s;
 }
@@ -413,8 +425,8 @@ function extractCottonName(yarn) {
     if (upper.includes('PIMA') && upper.includes('ORGANICO')) return 'ALGODÓN PIMA ORGANICO (QQ)';
     if (upper.includes('COP') && upper.includes('PIMA')) return 'COP PIMA';
     if (upper.includes('PIMA')) return 'PIMA';
-    if (upper.includes('TANGUIS') && upper.includes('BCI')) return 'ALGODÓN TANGUIS NC BCI (QQ)';
-    if (upper.includes('COP') && upper.includes('TANGUIS') && upper.includes('BCI')) return 'COP TANGUIS BCI';
+    if (upper.includes('COP') && (upper.includes('TANGUIS') || upper.includes('UPLAND')) && upper.includes('BCI')) return 'COP UPLAND BCI';
+    if ((upper.includes('TANGUIS') || upper.includes('UPLAND')) && upper.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
     if (upper.includes('COP') && upper.includes('TANGUIS')) return 'COP TANGUIS';
     if (upper.includes('TANGUIS')) return 'TANGUIS';
     if (upper.includes('UPLAND') && upper.includes('USTCP')) return 'UPLAND USTCP';
