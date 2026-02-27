@@ -19,7 +19,7 @@
         <div class="flex gap-3 items-center bg-white p-2 rounded-lg shadow-sm border border-slate-200">
             <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" onchange="processFile()" class="block w-60 text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold cursor-pointer hover:file:bg-blue-100"/>
             <button onclick="exportToExcel()" id="btnExport" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded text-xs shadow transition-colors">EXCEL</button>
-            <div id="appVersion" class="text-xs text-slate-400 ml-4">v07</div>
+            <div id="appVersion" class="text-xs text-slate-400 ml-4">v10</div>
         </div>
     </div>
 
@@ -195,15 +195,15 @@
         </div>
     </div>
 
-    <script src="js/modules/utils.js"></script>
-    <script src="js/modules/data.js"></script>
-    <script src="js/modules/detailGroups.js"></script>
-    <script src="js/modules/summaryGerencial.js"></script>
-    <script src="js/modules/crudos.js"></script>
-    <script src="js/modules/mezclas.js"></script>
-    <script src="js/modules/summary.js"></script>
-    <script src="js/modules/export.js"></script>
-    <script src="js/modules/orchestrator.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/detailGroups.js"></script>
+    <script src="js/summaryGerencial.js"></script>
+    <script src="js/crudos.js"></script>
+    <script src="js/mezclas.js"></script>
+    <script src="js/summary.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/orchestrator.js"></script>
     <script>
         // Auto-test: si se abre con ?autotest=1 intentamos cargar 'ultimo.xlsx' automáticamente
         (function(){
