@@ -1,5 +1,5 @@
 (function () {
-    const v = 'v09';
+    const v = 'v10';
     const el = document.getElementById('appVersion');
     if (el) el.textContent = v;
     console.log('Orchestrator loaded - version', v);
