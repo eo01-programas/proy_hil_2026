@@ -309,7 +309,7 @@ function exportToExcel() {
     });
 
     const sheet1 = XLSX.utils.aoa_to_sheet(ws_data1);
-    sheet1['!cols'] = [{wch:12}, {wch:15}, {wch:30}, ...monthIndices.map(() => ({wch:12})), {wch:12}];
+    sheet1['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 30 }, ...monthIndices.map(() => ({ wch: 12 })), { wch: 12 }];
     applyNumericFormats(sheet1);
     XLSX.utils.book_append_sheet(wb, sheet1, "Detalle y Gerencial");
 
@@ -417,7 +417,7 @@ function exportToExcel() {
     addFiberTableToSheet("OTRAS FIBRAS (KG REQ)", detailOtras, ORDERED_OTHER_KEYS);
 
     const sheet2 = XLSX.utils.aoa_to_sheet(ws_data2);
-    sheet2['!cols'] = [{wch:12}, {wch:15}, {wch:30}, ...monthIndices.map(() => ({wch:12})), {wch:12}];
+    sheet2['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 30 }, ...monthIndices.map(() => ({ wch: 12 })), { wch: 12 }];
     applyNumericFormats(sheet2);
     XLSX.utils.book_append_sheet(wb, sheet2, "Materiales y Resumen");
 
@@ -465,7 +465,7 @@ function exportToExcel() {
         });
 
         const sheet = XLSX.utils.aoa_to_sheet(ws);
-        sheet['!cols'] = [{wch:30}, {wch:16}, {wch:48}, {wch:14}];
+        sheet['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 48 }, { wch: 14 }];
         applyNumericFormats(sheet);
         XLSX.utils.book_append_sheet(wb, sheet, `MATERIALES_${MONTH_NAMES[idx]}`);
     });
@@ -630,6 +630,8 @@ function exportToExcel() {
         const mezclaRawVec = (globalMezclaRaw && globalMezclaRaw.length) ? globalMezclaRaw.slice() : new Array(12).fill(0);
         const totalRawVec = crudoRawVec.map((v, i) => (v || 0) + (mezclaRawVec[i] || 0));
 
+        const checkVec = totalLineasVec.map((v, i) => v - totalRawVec[i]);
+
         const pushRow = (label, vec) => {
             const r = [label];
             monthIdxs.forEach(idx => r.push(parseFloat(vec[idx] || 0) || 0));
@@ -639,6 +641,7 @@ function exportToExcel() {
         pushRow("B1. TOTAL PESO HILADOS - CRUDOS (BRUTO):", crudoRawVec);
         pushRow("B2. TOTAL PESO HILADOS - MEZCLAS (BRUTO):", mezclaRawVec);
         pushRow("B. TOTAL PESO HILADOS (CRUDOS+MEZCLAS BRUTO):", totalRawVec);
+        pushRow("DIFERENCIA (A - B):", checkVec);
         rows.push([]);
         return rows;
     }
