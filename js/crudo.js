@@ -11,7 +11,7 @@ function renderCrudosTable() {
         // Excluir filas de comentario/agrupación y también filas que NO están entre los items cargados por data.js
         const filteredRows = (group.rows || []).filter(r => {
             const txt = ((r.line||'') + '|' + (r.client||'') + '|' + (r.yarn||'')).toString().toUpperCase();
-            const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+            const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('RESERVA'));
             if (isComment) return false;
             if (typeof r.rowIndex !== 'undefined') return allowedRowIndices.has(r.rowIndex);
             // fallback: match by triple key (line|client|yarn) against GLOBAL_ITEMS
@@ -87,7 +87,7 @@ function recalcCrudoGroup(groupIndex) {
     const allowedRowIndices = new Set((GLOBAL_ITEMS || []).map(it => it.rowIndex).filter(i => i !== undefined));
     const filteredRows = (group.rows || []).filter(r => {
         const txt = ((r.line||'') + '|' + (r.client||'') + '|' + (r.yarn||'')).toString().toUpperCase();
-        const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('PROYECCI') || txt.includes('PROYECCIÓN') || txt.includes('RESERVA'));
+        const isComment = (txt.includes('CLIENTES VARIOS') || txt.includes('CLIENTE VARIOS') || txt.includes('RESERVA'));
         if (isComment) return false;
         if (typeof r.rowIndex !== 'undefined') return allowedRowIndices.has(r.rowIndex);
         return (GLOBAL_ITEMS || []).some(it => (it.line||'') === (r.line||'') && (it.client||'') === (r.client||'') && (it.yarn||'') === (r.yarn||''));
