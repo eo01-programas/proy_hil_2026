@@ -21,7 +21,7 @@ function renderBalanceView() {
     const isPerfect = Math.abs(checkTotal) < 1;
     const checkClass = isPerfect ? "text-green-600" : "text-red-600";
     const checkText = isPerfect ? "✓ CUADRA" : "✕ REVISAR CARGA";
-    // CONTROL (A - B) row and visible discrepancy warning suppressed per user request
+    html += `<tr class="${checkClass} font-bold bg-gray-50"><td class="py-2 px-3 text-right">DIFERENCIA (A - B) ${checkText}:</td>${generateCellsHTML(checkVec, false, '', true)}</tr>`;
 
     html += `<tr><td colspan="${activeIndices.length + 2}" class="h-4"></td></tr>`;
     html += `</tbody>`;
