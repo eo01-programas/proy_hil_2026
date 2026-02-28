@@ -251,7 +251,7 @@ function processFile() {
             console.log('excelGroupTotals capturado:', excelGroupTotals);
             console.log('grandTotalVector calculado:', grandTotalVector);
 
-            applySplitToAllItems();
+            // applySplitToAllItems(); // Desactivado para evitar romper la lógica de mezclas
             recalcAll();
             finalizeProcessing();
 
@@ -291,7 +291,7 @@ async function processArrayBuffer(buffer) {
         console.log('excelGroupTotals capturado:', excelGroupTotals);
         console.log('grandTotalVector calculado:', grandTotalVector);
 
-        applySplitToAllItems();
+        // applySplitToAllItems(); // Desactivado para evitar romper la lógica de mezclas
         recalcAll();
         finalizeProcessing();
 
