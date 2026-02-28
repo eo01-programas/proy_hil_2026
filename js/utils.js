@@ -7,6 +7,7 @@ const ORDERED_COTTON_KEYS = [
     "ALGODÓN ORGANICO - GOTS (QQ)",
     "ALGODÓN ORGANICO - OCS (QQ)",
     "ALGODÓN UPLAND USTCP (QQ)",
+    "ALGODÓN TANGUIS (QQ)",
     "ALGODÓN UPLAND (QQ)",
     "ALGODÓN ELEGANT (QQ)",
     "ALGODÓN PIMA ORGANICO - GOTS (QQ)"
@@ -225,7 +226,7 @@ function getNormalizedComponent(rawName) {
     if (u.includes('ORGANICO') && u.includes('GOTS')) return 'ALG_ORG_GOTS';
     if (u.includes('ORGANICO') && u.includes('OCS')) return 'ALG_ORG_OCS';
     if (u.includes('ORGANICO')) return 'ALG_ORG';
-    if ((u.includes('TANGUIS') || u.includes('UPLAND')) && u.includes('BCI')) return 'UPLAND_BCI';
+    if (!u.includes('PIMA') && u.includes('BCI')) return 'UPLAND_BCI';
     if (u.includes('UPLAND') && u.includes('USTCP')) return 'UPLAND_USTCP';
     u = u.replace(/\bSTD\b/g, '').replace(/\bHTR\b/g, '').replace(/\bHEATHER\b/g, '').replace(/\bNC\b/g, '').replace(/\bOCS\b/g, '')
         .replace(/\bGOTS\b/g, '').replace(/\bBCI\b/g, '').replace(/\bUSTCP\b/g, '')
@@ -427,8 +428,8 @@ function extractCottonName(yarn) {
     if (upper.includes('PIMA') && upper.includes('ORGANICO')) return 'ALGODÓN PIMA ORGANICO (QQ)';
     if (upper.includes('COP') && upper.includes('PIMA')) return 'COP PIMA';
     if (upper.includes('PIMA')) return 'PIMA';
-    if (upper.includes('COP') && (upper.includes('TANGUIS') || upper.includes('UPLAND')) && upper.includes('BCI')) return 'COP UPLAND BCI';
-    if ((upper.includes('TANGUIS') || upper.includes('UPLAND')) && upper.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
+    if (upper.includes('COP') && !upper.includes('PIMA') && upper.includes('BCI')) return 'COP UPLAND BCI';
+    if (!upper.includes('PIMA') && upper.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
     if (upper.includes('COP') && upper.includes('TANGUIS')) return 'COP TANGUIS';
     if (upper.includes('TANGUIS')) return 'TANGUIS';
     if (upper.includes('UPLAND') && upper.includes('USTCP')) return 'UPLAND USTCP';
@@ -541,16 +542,20 @@ function getCrudoGroupKey(yarnName, clientName = "") {
     const s = yarnName.toUpperCase().trim();
     if (s.includes('USTCP')) return '__GROUP_ALGODON_USTCP__';
     if (s.includes('BCI')) return '__GROUP_ALGODON_BCI__';
-    const hasPIMA = s.includes('PIMA');
-    if (hasPIMA) {
+    if (s.includes('PIMA')) {
         if (s.includes('GOTS')) return '__GROUP_ALGODON_PIMA_ORGANICO_GOTS__';
         if (s.includes('OCS')) return '__GROUP_ALGODON_PIMA_ORGANICO_OCS__';
         return '__GROUP_ALGODON_PIMA__';
-    } else {
+    }
+    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
+        return '__GROUP_ALGODON_UPLAND__';
+    }
+    if (s.includes('TANGUIS')) {
         if (s.includes('GOTS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_GOTS__';
         if (s.includes('OCS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_OCS__';
         return '__GROUP_ALGODON_TANGUIS__';
     }
+    return '__OTROS_CRUDOS__';
 }
 
 function getCrudoGroupTitle(yarnName, clientName = "") {
@@ -558,16 +563,20 @@ function getCrudoGroupTitle(yarnName, clientName = "") {
     const s = yarnName.toUpperCase().trim();
     if (s.includes('USTCP')) return 'ALGODON USTCP';
     if (s.includes('BCI')) return 'ALGODON BCI';
-    const hasPIMA = s.includes('PIMA');
-    if (hasPIMA) {
+    if (s.includes('PIMA')) {
         if (s.includes('GOTS')) return 'ALGODON PIMA ORGANICO (GOTS)';
         if (s.includes('OCS')) return 'ALGODON PIMA ORGANICO (OCS)';
         return 'ALGODON PIMA';
-    } else {
+    }
+    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
+        return 'ALGODON UPLAND';
+    }
+    if (s.includes('TANGUIS')) {
         if (s.includes('GOTS')) return 'ALGODON TANGUIS ORGANICO (GOTS)';
         if (s.includes('OCS')) return 'ALGODON TANGUIS ORGANICO (OCS)';
         return 'ALGODON TANGUIS';
     }
+    return 'OTROS (CRUDOS)';
 }
 
 // Helper: Extract component names from a mixed yarn, preserving type qualifiers like A100, STD, NANO
