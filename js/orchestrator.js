@@ -683,7 +683,8 @@ function recalcAll() {
             '__GROUP_ALGODON_TANGUIS_ORGANICO_GOTS__': 5,
             '__GROUP_ALGODON_BCI__': 6,
             '__GROUP_ALGODON_USTCP__': 7,
-            '__OTROS_CRUDOS__': 8
+            '__GROUP_ALGODON_UPLAND__': 8,
+            '__OTROS_CRUDOS__': 9
         };
         const orderA = orderMap[a.key] !== undefined ? orderMap[a.key] : 999;
         const orderB = orderMap[b.key] !== undefined ? orderMap[b.key] : 999;
@@ -819,7 +820,7 @@ function recalcAll() {
         if (strictToken === 'PIMA_NC') return 'ALGODÓN PIMA NC (QQ)';
         if (strictToken === 'TANGUIS_ORG_OCS') return 'ALGODÓN TANGUIS ORGANICO (OCS) (QQ)';
         if (strictToken === 'TANGUIS_ORG_GOTS') return 'ALGODÓN TANGUIS ORGANICO (GOTS) (QQ)';
-        if (strictToken === 'UPLAND_BCI' || strictToken === 'TANGUIS_BCI') return 'ALGODÓN UPLAND BCI (QQ)';
+        if (!strictToken.includes('PIMA') && strictToken.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
         if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS (QQ)';
         if (strictToken === 'ALGODON_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
         if (strictToken === 'ALGODON_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
@@ -851,8 +852,7 @@ function recalcAll() {
         if (u === 'PIMA_ORG_GOTS') return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
         if (u === 'ALG_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (u === 'ALG_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
-        if (u === 'TANGUIS_BCI' || u === 'UPLAND_BCI') return 'ALGODÓN UPLAND BCI (QQ)';
-        if ((u.includes('TANGUIS') || u.includes('UPLAND')) && u.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
+        if (!u.includes('PIMA') && u.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
         if (u === 'UPLAND_USTCP') return 'ALGODÓN UPLAND USTCP (QQ)';
         if (u.includes('PIMA') && u.includes('ORGANICO')) {
             if (u.includes('GOTS')) return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
