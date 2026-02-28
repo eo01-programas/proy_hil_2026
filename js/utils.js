@@ -346,6 +346,9 @@ function cleanImportedName(yarnRaw, clientRaw) {
     // REGLA 1: Cambiar "PES PREPREVE" a "PES REPREVE"
     s = s.replace(/PES\s+PREPREVE/gi, 'PES REPREVE');
 
+    // REGLA 1B: Traducir "VI" a "VISCOSA" para que se reconozca correctamente como mezcla
+    s = s.replace(/\bVI\b/gi, 'VISCOSA');
+
     // REGLA 2: Eliminar los términos "HTR" y "HEATHER" completamente del hilado
     // Eliminar HTR o HEATHER al final
     s = s.replace(/\s+(HTR|HEATHER)\s*$/i, '').trim();
@@ -547,13 +550,17 @@ function getCrudoGroupKey(yarnName, clientName = "") {
         if (s.includes('OCS')) return '__GROUP_ALGODON_PIMA_ORGANICO_OCS__';
         return '__GROUP_ALGODON_PIMA__';
     }
-    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
-        return '__GROUP_ALGODON_UPLAND__';
-    }
     if (s.includes('TANGUIS')) {
         if (s.includes('GOTS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_GOTS__';
         if (s.includes('OCS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_OCS__';
         return '__GROUP_ALGODON_TANGUIS__';
+    }
+    if (s.includes('ORGANICO') || s.includes('ORG')) {
+        if (s.includes('GOTS')) return '__GROUP_ALGODON_ORGANICO_GOTS__';
+        if (s.includes('OCS')) return '__GROUP_ALGODON_ORGANICO_OCS__';
+    }
+    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
+        return '__GROUP_ALGODON_UPLAND__';
     }
     return '__OTROS_CRUDOS__';
 }
@@ -568,13 +575,17 @@ function getCrudoGroupTitle(yarnName, clientName = "") {
         if (s.includes('OCS')) return 'ALGODON PIMA ORGANICO (OCS)';
         return 'ALGODON PIMA';
     }
-    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
-        return 'ALGODON UPLAND';
-    }
     if (s.includes('TANGUIS')) {
         if (s.includes('GOTS')) return 'ALGODON TANGUIS ORGANICO (GOTS)';
         if (s.includes('OCS')) return 'ALGODON TANGUIS ORGANICO (OCS)';
         return 'ALGODON TANGUIS';
+    }
+    if (s.includes('ORGANICO') || s.includes('ORG')) {
+        if (s.includes('GOTS')) return 'ALGODON ORGANICO (GOTS)';
+        if (s.includes('OCS')) return 'ALGODON ORGANICO (OCS)';
+    }
+    if (s.includes('UPLAND') || s.includes('FLAME') || s.includes('ELEGANT') || s.includes('COTTON') || (!s.includes('TANGUIS') && s.includes('COP')) || s.includes('ALGODON') && !s.includes('TANGUIS')) {
+        return 'ALGODON UPLAND';
     }
     return 'OTROS (CRUDOS)';
 }
