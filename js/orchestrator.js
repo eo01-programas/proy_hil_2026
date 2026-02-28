@@ -388,7 +388,7 @@ function applyModalMove() {
     if (!groupKey || groupKey === '') { alert('Elige un bloque'); return; }
     if (module === 'CRUDO') { item._forcedClassification = 'CRUDO'; item._forcedGroup = groupKey; }
     else { item._forcedClassification = 'MEZCLA'; item._forcedGroup = groupKey; }
-    applySplitToAllItems();
+    // applySplitToAllItems(); // Desactivado
     closeModal();
     recalcAll();
 }
@@ -451,7 +451,7 @@ function closeDiscrepancyModal() {
 // --- ORQUESTADOR PRINCIPAL (RECALC ALL) ---
 function recalcAll() {
     // Ensure multi-component yarns are split into component items before any classification
-    try { applySplitToAllItems(); } catch (e) { console.debug('applySplitToAllItems() failed', e); }
+    // try { applySplitToAllItems(); } catch (e) { console.debug('applySplitToAllItems() failed', e); }
     // 1. Resetear estados
     crudoGroups = [];
     mezclaGroups = [];
@@ -681,10 +681,12 @@ function recalcAll() {
             '__GROUP_ALGODON_TANGUIS__': 3,
             '__GROUP_ALGODON_TANGUIS_ORGANICO_OCS__': 4,
             '__GROUP_ALGODON_TANGUIS_ORGANICO_GOTS__': 5,
-            '__GROUP_ALGODON_BCI__': 6,
-            '__GROUP_ALGODON_USTCP__': 7,
-            '__GROUP_ALGODON_UPLAND__': 8,
-            '__OTROS_CRUDOS__': 9
+            '__GROUP_ALGODON_ORGANICO_OCS__': 6,
+            '__GROUP_ALGODON_ORGANICO_GOTS__': 7,
+            '__GROUP_ALGODON_BCI__': 8,
+            '__GROUP_ALGODON_USTCP__': 9,
+            '__GROUP_ALGODON_UPLAND__': 10,
+            '__OTROS_CRUDOS__': 11
         };
         const orderA = orderMap[a.key] !== undefined ? orderMap[a.key] : 999;
         const orderB = orderMap[b.key] !== undefined ? orderMap[b.key] : 999;
