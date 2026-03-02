@@ -7,7 +7,6 @@ const ORDERED_COTTON_KEYS = [
     "ALGODÓN ORGANICO - GOTS (QQ)",
     "ALGODÓN ORGANICO - OCS (QQ)",
     "ALGODÓN UPLAND USTCP (QQ)",
-    "ALGODÓN TANGUIS (QQ)",
     "ALGODÓN UPLAND (QQ)",
     "ALGODÓN ELEGANT (QQ)",
     "ALGODÓN PIMA ORGANICO - GOTS (QQ)"
@@ -232,7 +231,7 @@ function getNormalizedComponent(rawName) {
         .replace(/\bGOTS\b/g, '').replace(/\bBCI\b/g, '').replace(/\bUSTCP\b/g, '')
         .replace(/[0-9\/\%()[\]]/g, '').replace(/\s+/g, ' ').trim();
     if (u.includes('PIMA')) return 'PIMA';
-    if (u.includes('TANGUIS')) return 'TANGUIS';
+    if (u.includes('TANGUIS')) return 'UPLAND';
     if (u.includes('UPLAND') || u.includes('FLAME')) return 'UPLAND';
     if (u.includes('ELEGANT')) return 'ELEGANT';
     if (u.includes('ALGODON') || u.includes('COTTON') || u.includes('ORGANICO')) return 'ALGODON';
@@ -433,8 +432,8 @@ function extractCottonName(yarn) {
     if (upper.includes('PIMA')) return 'PIMA';
     if (upper.includes('COP') && !upper.includes('PIMA') && upper.includes('BCI')) return 'COP UPLAND BCI';
     if (!upper.includes('PIMA') && upper.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
-    if (upper.includes('COP') && upper.includes('TANGUIS')) return 'COP TANGUIS';
-    if (upper.includes('TANGUIS')) return 'TANGUIS';
+    if (upper.includes('COP') && upper.includes('TANGUIS')) return 'COP UPLAND';
+    if (upper.includes('TANGUIS')) return 'UPLAND';
     if (upper.includes('UPLAND') && upper.includes('USTCP')) return 'UPLAND USTCP';
     if (upper.includes('UPLAND') && upper.includes('FLAME')) return 'UPLAND FLAME';
     if (upper.includes('UPLAND')) return 'UPLAND';
@@ -551,9 +550,9 @@ function getCrudoGroupKey(yarnName, clientName = "") {
         return '__GROUP_ALGODON_PIMA__';
     }
     if (s.includes('TANGUIS')) {
-        if (s.includes('GOTS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_GOTS__';
-        if (s.includes('OCS')) return '__GROUP_ALGODON_TANGUIS_ORGANICO_OCS__';
-        return '__GROUP_ALGODON_TANGUIS__';
+        if (s.includes('GOTS')) return '__GROUP_ALGODON_ORGANICO_GOTS__';
+        if (s.includes('OCS')) return '__GROUP_ALGODON_ORGANICO_OCS__';
+        return '__GROUP_ALGODON_UPLAND__';
     }
     if (s.includes('ORGANICO') || s.includes('ORG')) {
         if (s.includes('GOTS')) return '__GROUP_ALGODON_ORGANICO_GOTS__';
@@ -576,9 +575,9 @@ function getCrudoGroupTitle(yarnName, clientName = "") {
         return 'ALGODON PIMA';
     }
     if (s.includes('TANGUIS')) {
-        if (s.includes('GOTS')) return 'ALGODON TANGUIS ORGANICO (GOTS)';
-        if (s.includes('OCS')) return 'ALGODON TANGUIS ORGANICO (OCS)';
-        return 'ALGODON TANGUIS';
+        if (s.includes('GOTS')) return 'ALGODON ORGANICO (GOTS)';
+        if (s.includes('OCS')) return 'ALGODON ORGANICO (OCS)';
+        return 'ALGODON UPLAND';
     }
     if (s.includes('ORGANICO') || s.includes('ORG')) {
         if (s.includes('GOTS')) return 'ALGODON ORGANICO (GOTS)';
