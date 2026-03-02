@@ -750,12 +750,6 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set(), ro
         activeIndices = Array.from({ length: 12 }, (_, i) => i);
     }
 
-    // Filtrar meses anteriores al mes actual del calendario
-    // (no tiene sentido mostrar ENE si ya estamos en FEB o posterior)
-    const currentMonthIdx = new Date().getMonth(); // 0=ENE, 1=FEB, ..., 11=DIC
-    const fromCurrentMonth = activeIndices.filter(idx => idx >= currentMonthIdx);
-    // Solo aplicar el filtro si quedan meses visibles (para no dejar la tabla en blanco)
-    if (fromCurrentMonth.length > 0) {
-        activeIndices = fromCurrentMonth;
-    }
+    // Mostrar todos los meses que tengan datos, sin filtrar por fecha actual
+    // (el Excel puede contener meses pasados que deben ser visibles)
 }
