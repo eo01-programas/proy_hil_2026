@@ -820,10 +820,10 @@ function recalcAll() {
         if (strictToken === 'PIMA_ORG_OCS') return 'ALGODÓN PIMA ORGANICO - OCS (QQ)';
         if (strictToken === 'PIMA_ORG_GOTS') return 'ALGODÓN PIMA ORGANICO - GOTS (QQ)';
         if (strictToken === 'PIMA_NC') return 'ALGODÓN PIMA NC (QQ)';
-        if (strictToken === 'TANGUIS_ORG_OCS') return 'ALGODÓN TANGUIS ORGANICO (OCS) (QQ)';
-        if (strictToken === 'TANGUIS_ORG_GOTS') return 'ALGODÓN TANGUIS ORGANICO (GOTS) (QQ)';
+        if (strictToken === 'TANGUIS_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
+        if (strictToken === 'TANGUIS_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (!strictToken.includes('PIMA') && strictToken.includes('BCI')) return 'ALGODÓN UPLAND BCI (QQ)';
-        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN TANGUIS (QQ)';
+        if (strictToken === 'TANGUIS_NC') return 'ALGODÓN UPLAND (QQ)';
         if (strictToken === 'ALGODON_ORG_OCS') return 'ALGODÓN ORGANICO - OCS (QQ)';
         if (strictToken === 'ALGODON_ORG_GOTS') return 'ALGODÓN ORGANICO - GOTS (QQ)';
         if (strictToken === 'ALGODON_NC') return 'ALGODÓN UPLAND (QQ)';
@@ -861,7 +861,7 @@ function recalcAll() {
             return 'ALGODÓN PIMA ORGANICO - OCS (QQ)';
         }
         if (u.includes('PIMA')) return 'ALGODÓN PIMA NC (QQ)';
-        if (u.includes('TANGUIS')) return 'ALGODÓN TANGUIS (QQ)';
+        if (u.includes('TANGUIS')) return 'ALGODÓN UPLAND (QQ)';
         if (u.includes('UPLAND')) return 'ALGODÓN UPLAND (QQ)';
         if (u.includes('ELEGANT')) return 'ALGODÓN ELEGANT (QQ)';
 
