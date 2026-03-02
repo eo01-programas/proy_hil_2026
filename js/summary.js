@@ -91,7 +91,6 @@ function renderBalanceView() {
 
         // Reiniciar detailAlgodon para evitar acumulación entre renders
         detailAlgodon = {};
-        detailOtras = {};
 
         const assignedCrudos = new Set();
         const assignedMezclas = new Set();
