@@ -89,6 +89,10 @@ function renderBalanceView() {
             });
         } catch (e) { }
 
+        // Reiniciar detailAlgodon para evitar acumulación entre renders
+        detailAlgodon = {};
+        detailOtras = {};
+
         const assignedCrudos = new Set();
         const assignedMezclas = new Set();
 
@@ -102,7 +106,7 @@ function renderBalanceView() {
             { label: 'ALGODÓN UPLAND USTCP (QQ)', matcher: (y, g) => { const a = normStrFiber(y); const t = normStrFiber(g || ''); if (a.includes('USTCP') || a.includes('US TCP') || t.includes('USTCP') || t.includes('US TCP')) return true; return false; } },
             { label: 'ALGODÓN ELEGANT (QQ)', matcher: (y, g) => { const a = normStrFiber(y); const t = normStrFiber(g || ''); if (a.includes('ELEGANT') || t.includes('ELEGANT')) return true; return false; } },
             { label: 'ALGODÓN PIMA ORGANICO - GOTS (QQ)', matcher: (y, g) => { const a = normStrFiber(y); const t = normStrFiber(g || ''); if (!a.includes('PIMA')) return false; if (a.includes('OCS') || t.includes('OCS')) return false; if (!a.includes('GOTS') && !t.includes('GOTS')) return false; return true; } },
-            // ALGODÓN UPLAND: Catch-all para cualquier algodón restante sin certificación específica
+            // ALGODÓN UPLAND: captura TANGUIS consolidado + cualquier algodón restante
             { label: 'ALGODÓN UPLAND (QQ)', matcher: (y, g) => { return true; } }
         ];
 
@@ -223,16 +227,13 @@ function renderBalanceView() {
                 });
 
                 // store computed data into detailAlgodon
-                try {
-                    if (typeof detailAlgodon !== 'undefined') {
-                        detailAlgodon[label] = { totalValues: agg, clients: clientsMap, crudoRows: assignedRowsForLabel, mezclaItems: assignedItemsForLabel };
-                    }
-                } catch (e) { }
+                detailAlgodon[label] = { totalValues: agg, clients: clientsMap, crudoRows: assignedRowsForLabel, mezclaItems: assignedItemsForLabel };
             } catch (e) { }
         });
 
         // DEBUG SUMMARY: Print count of crudos assigned per fiber label
         console.groupCollapsed('%c📋 ASIGNACIÓN DE CRUDOS POR FIBRA (verificación completa)', 'background:#333;color:#ffff00;font-weight:bold;padding:4px;font-size:12px');
+
         const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
         const mermaAlgodon = 0.40; // Merma de algodón para logs
         const formatLogNum = (n) => {
@@ -537,12 +538,14 @@ function validateCottonAssignments() {
                 componentes.push({ fibra: 'PIMA', grupoEspecifico: categoriaCotton, categoriaGeneral: 'ALGODÓN (QQ)' });
             }
 
-            // Detectar TANGUIS
+            // Detectar TANGUIS -> consolidado a UPLAND
             if (yarnUpper.includes('TANGUIS')) {
                 if (yarnUpper.includes('BCI')) {
                     componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN UPLAND BCI (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
+                } else if (yarnUpper.includes('USTCP') || yarnUpper.includes('US TCP')) {
+                    componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN UPLAND USTCP (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
                 } else {
-                    componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN TANGUIS (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
+                    componentes.push({ fibra: 'TANGUIS', grupoEspecifico: 'ALGODÓN UPLAND (QQ)', categoriaGeneral: 'ALGODÓN (QQ)' });
                 }
             }
 
@@ -717,6 +720,11 @@ function determineCottonKey(yarn, groupTitle) {
         // UPLAND USTCP: USTCP o US TCP
         if (combined.includes('USTCP') || combined.includes('US TCP')) {
             return keys.find(k => k.toUpperCase().includes('USTCP')) || keys[keys.length - 1];
+        }
+
+        // TANGUIS: consolidado a UPLAND (excepto si tiene BCI o USTCP, manejados arriba)
+        if (combined.includes('TANGUIS')) {
+            return keys.find(k => k.toUpperCase().includes('UPLAND') && !k.toUpperCase().includes('BCI') && !k.toUpperCase().includes('USTCP')) || keys[keys.length - 1];
         }
 
         // ELEGANT
