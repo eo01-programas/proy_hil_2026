@@ -345,9 +345,6 @@ function cleanImportedName(yarnRaw, clientRaw) {
     // REGLA 1: Cambiar "PES PREPREVE" a "PES REPREVE"
     s = s.replace(/PES\s+PREPREVE/gi, 'PES REPREVE');
 
-    // REGLA 1B: Traducir "VI" a "VISCOSA" para que se reconozca correctamente como mezcla
-    s = s.replace(/\bVI\b/gi, 'VISCOSA');
-
     // REGLA 2: Eliminar los términos "HTR" y "HEATHER" completamente del hilado
     // Eliminar HTR o HEATHER al final
     s = s.replace(/\s+(HTR|HEATHER)\s*$/i, '').trim();
