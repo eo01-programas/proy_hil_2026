@@ -16,6 +16,7 @@ const ORDERED_OTHER_KEYS = [
     "LYOCELL STD (KG)",
     "NYLON (KG)",
     "RECYCLED PES (KG)",
+    "PES (KG)",
     "WOOL 17.5 (KG)",
     "LYOCELL A100 (KG)",
     "MODAL (KG)",
