@@ -1166,6 +1166,13 @@ function recalcAll() {
                         // Usar actualComponentName (extraído del yarn) para determinar fiberName correcto
                         const realCompName = it.actualComponentName || componentToken;
                         const realCompUpper = (realCompName || '').toString().toUpperCase();
+                        const itemClientUpper = (it.client || client || '').toString().toUpperCase();
+                        const isBananaPesBlend = itemClientUpper.includes('BANANA')
+                            && realCompUpper.includes('PES')
+                            && !realCompUpper.includes('REPREVE')
+                            && !realCompUpper.includes('PREPREVE')
+                            && !realCompUpper.includes('RECYCLED')
+                            && !realCompUpper.includes('RECICLADO');
 
                         // Determinar fiberName basado en el nombre REAL del componente
                         let itemFiberName = fiberName; // Default
@@ -1189,6 +1196,8 @@ function recalcAll() {
                             itemFiberName = 'NYLON (KG)';
                         } else if (realCompUpper.includes('MODAL')) {
                             itemFiberName = 'MODAL (KG)';
+                        } else if (isBananaPesBlend) {
+                            itemFiberName = 'PES (KG)';
                         } else if (realCompUpper.includes('REPREVE') || realCompUpper.includes('PREPREVE') || (realCompUpper.includes('PES') && (realCompUpper.includes('RECYCLED') || realCompUpper.includes('RECICLADO')))) {
                             itemFiberName = 'RECYCLED PES (KG)';
                         }
