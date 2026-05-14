@@ -38,6 +38,8 @@ function renderBalanceView() {
             for (const kw of cottonKeywords) {
                 if (a.includes(kw) || t.includes(kw)) return true;
             }
+            // También detectar si el título del grupo (mezclas) menciona algodón
+            if (t.includes('PIMA') || t.includes('TANGUIS') || t.includes('UPLAND') || t.includes('COTTON') || t.includes('COP')) return true;
             return false;
         };
 
@@ -559,15 +561,19 @@ function validateCottonAssignments() {
 
             // Detectar LYOCELL
             if (yarnUpper.includes('LYOCELL')) {
-                if (yarnUpper.includes('A100')) {
+                if (yarnUpper.includes('SEACELL')) {
+                    componentes.push({ fibra: 'SEACELL', grupoEspecifico: 'LYOCELL SEACELL (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
+                } else if (yarnUpper.includes('A100')) {
                     componentes.push({ fibra: 'LYOCELL', grupoEspecifico: 'LYOCELL A100 (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
                 } else {
                     componentes.push({ fibra: 'LYOCELL', grupoEspecifico: 'LYOCELL STD (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
                 }
+            } else if (yarnUpper.includes('SEACELL')) {
+                componentes.push({ fibra: 'SEACELL', grupoEspecifico: 'LYOCELL SEACELL (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
             }
 
             // Detectar PES REPREVE/PREPREVE (RECYCLED PES)
-            if (yarnUpper.includes('PES') && (yarnUpper.includes('REPREVE') || yarnUpper.includes('PREPREVE'))) {
+            if (yarnUpper.includes('PES') && (yarnUpper.includes('REPREVE') || yarnUpper.includes('PREPREVE') || yarnUpper.includes('RECYCLED') || yarnUpper.includes('RECICLADO'))) {
                 componentes.push({ fibra: 'PES REPREVE', grupoEspecifico: 'RECYCLED PES (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
             } else if (yarnUpper.includes('PES')) {
                 // PES genérico (no reciclado)
@@ -577,6 +583,11 @@ function validateCottonAssignments() {
             // Detectar MODAL
             if (yarnUpper.includes('MODAL')) {
                 componentes.push({ fibra: 'MODAL', grupoEspecifico: 'MODAL (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
+            }
+
+            // Detectar VISCOSA / PV
+            if (yarnUpper.includes('VISCOSA') || yarnUpper.includes('VISCOSE') || /\bVI\b/.test(yarnUpper) || yarnUpper.includes('PV')) {
+                componentes.push({ fibra: 'VISCOSA', grupoEspecifico: 'VISCOSA (KG)', categoriaGeneral: 'OTRAS FIBRAS (KG REQ)' });
             }
 
             // Detectar NYLON
@@ -749,13 +760,11 @@ function extractPctFromYarn(yarn) {
     try {
         if (!yarn) return null;
         const s = yarn.toString();
-        // Permitir espacios antes de '%' y paréntesis alrededor: ej. "(65/35 %)" o "75/25%"
-        const m = s.match(/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*\s*%)/);
+        // Regex robusto para decimales y espacios: captura "75/16.5/8.5%" o "(75/25%)"
+        const m = s.match(/(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s*%/);
         if (!m) return null;
-        // Limpiar caracteres no numéricos salvo '/' y '.'
-        let pctBlock = m[0].replace('%', '').trim();
-        pctBlock = pctBlock.replace(/[^0-9\/\.]/g, '');
-        const parts = pctBlock.split('/').map(p => { const v = parseFloat(p); return isNaN(v) ? null : v / 100; }).filter(x => x !== null);
+        const pctBlock = m[1].trim();
+        const parts = pctBlock.split('/').map(p => { const v = parseFloat(p.trim()); return isNaN(v) ? null : v / 100; }).filter(x => x !== null);
         return (parts && parts.length > 0) ? parts : null;
     } catch (e) { return null; }
 }
@@ -3763,11 +3772,12 @@ function logOtherFiberDetail(fiberLabel) {
                         const targetNorm = normStrFiber(targetFiber || '');
                         // Keywords específicos por tipo de fibra
                         const fiberKeywords = {
-                            'LYOCELL A100': ['LYOCELL A100'],
+                            'LYOCELL A100': ['LYOCELL A100', 'A100'],
                             'LYOCELL': ['LYOCELL', 'TENCEL'],
+                            'SEACELL': ['SEACELL'],
                             'MODAL': ['MODAL'],
-                            'VISCOSA': ['VISCO', 'VISCOSE', 'RAYON'],
-                            'PES': ['PES', 'REPREVE', 'PREPREVE'],
+                            'VISCOSA': ['VISCO', 'VISCOSE', 'RAYON', 'PV', ' VI ', 'VI '],
+                            'PES': ['PES', 'REPREVE', 'PREPREVE', 'RECYCLED', 'RECICLADO'],
                             'ELASTANO': ['ELASTANO', 'ELASTANE', 'SPANDEX', 'LYCRA'],
                             'HEMP': ['HEMP', 'CAÑAMO'],
                             'ABETE': ['ABETE']
