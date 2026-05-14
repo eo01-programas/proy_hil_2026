@@ -34,7 +34,7 @@ function renderMezclasTable() {
         const firstItemWithYarn = Array.from(GLOBAL_ITEMS).find(item => group.uniqueYarns.has(item.id));
         // Remove trailing percentage parenthesis like "(75/25%)" for splitting purposes
         // IMPORTANT: Preserve type qualifiers like A100, STD, NANO, etc. before the percentages
-        const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/, '').trim();
+        const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+\s*%?\s*\)\s*$/, '').trim();
         let titleParts = [];
         if (titleNoPct.indexOf('/') >= 0) {
             // Split by "/" but preserve full fiber names with qualifiers (e.g., "LYOCELL A100", "LYOCELL STD")
@@ -64,7 +64,7 @@ function renderMezclasTable() {
         // *** CRITICAL: This mapping must use ORIGINAL titleParts order (before render reordering) ***
         let titlePctArr = [];
         try {
-            const mTitlePct = rawTitle.match(/\(\s*(\d+(?:\/\d+)+)\s*%?\s*\)/);
+            const mTitlePct = rawTitle.match(/\(\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+)\s*%?\s*\)/);
             if (mTitlePct) {
                 const parts = mTitlePct[1].split('/').map(p => {
                     const num = parseFloat(p.replace(/[^0-9.]/g, ''));
@@ -160,7 +160,7 @@ function renderMezclasTable() {
             percentagesStr = ` (${pctDisplay}%)`;
         } else if (firstItemWithYarn) {
             const yarnStr = firstItemWithYarn.yarn || '';
-            const match = yarnStr.match(/\((\d+\/\d+.*?)\)/);
+            const match = yarnStr.match(/\((\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+.*?)\)/);
             if (match) percentagesStr = ` (${match[1]})`;
         }
         const fullTitle = cleanMaterialTitle(group.title) + percentagesStr;
@@ -531,7 +531,7 @@ function recalcMezclaComponent(groupIndex, compIndex) {
     // Extract material components exactly like renderMezclasTable (remove trailing pct parentheses first)
     // IMPORTANT: Preserve type qualifiers like A100, STD, NANO, etc.
     const rawTitle = (group.title || '').toString();
-    const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\/\d+)+\s*%?\s*\)\s*$/, '').trim();
+    const titleNoPct = rawTitle.replace(/\s*\(\s*\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+\s*%?\s*\)\s*$/, '').trim();
     let titleParts = [];
     if (titleNoPct.indexOf('/') >= 0) {
         // Split by "/" and preserve full fiber names with qualifiers (e.g., "LYOCELL A100")
@@ -553,10 +553,10 @@ function recalcMezclaComponent(groupIndex, compIndex) {
     // Build titlePctArr and materialPctMap (MUST follow title order)
     let titlePctArr = [];
     try {
-        const mTitlePct = rawTitle.match(/\(\s*(\d+(?:\/\d+)+)\s*%?\s*\)/);
+        const mTitlePct = rawTitle.match(/\(\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+)\s*%?\s*\)/);
         if (mTitlePct) {
-            const parts = mTitlePct[1].split('/').map(p => { const num = parseFloat(p.replace(/[^0-9.]/g, '')); return (isNaN(num) ? 0 : num); });
-            if (parts.length === titleParts.length) titlePctArr = parts.map(n => (n > 1 ? n / 100 : n));
+            const parts = mTitlePct[1].split('/').map(p => { const num = parseFloat(p.trim()); return (isNaN(num) ? 0 : num); });
+            if (parts.length === titleParts.length) titlePctArr = parts.map(n => n / 100);
         }
     } catch (e) { titlePctArr = []; }
     const materialPctMap = {};
