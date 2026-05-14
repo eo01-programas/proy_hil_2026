@@ -70,7 +70,8 @@ function getStrictCanonicalToken(raw) {
     if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL_A100';
     if (u.includes('LYOCELL') || u.includes('TENCEL')) return 'LYOCELL';
     if (u.includes('MODAL')) return 'MODAL';
-    if (u.includes('VISCOSA') || u.includes('VISCOSE')) return 'VISCOSA';
+    if (u.includes('SEACELL')) return 'LYOCELL_SEACELL';
+    if (u.includes('VISCOSA') || u.includes('VISCOSE') || u.includes(' VI ') || u.startsWith('VI ') || u.endsWith(' VI') || u.includes(' VI/') || u.includes('/VI ') || u.includes('PV')) return 'VISCOSA';
     if (u.includes('NYLON')) return 'NYLON';
     if (u.includes('WOOL') || u.includes('MERINO')) return 'WOOL';
     if (u.includes('LINO')) return 'LINO';
@@ -531,7 +532,7 @@ function recalcAll() {
 
             // 2) Extract trailing percentages e.g. "(...50/30/20%)", "50/30/20%" or glued "LYOCELL50/30/20%"
             let pcts = [];
-            const pctMatch = yarnStr.match(/(?:\(|\[)?\s*(\d+(?:\/\d+)+)\s*%?\s*(?:\)|\])?\s*$/);
+            const pctMatch = yarnStr.match(/(?:\(|\[)?\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+)\s*%?\s*(?:\)|\])?\s*$/);
             if (pctMatch) {
                 const rawPcts = pctMatch[1];
                 pcts = rawPcts.split('/').map(s => { const n = parseFloat(s.replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : (n / 100); });
@@ -557,7 +558,7 @@ function recalcAll() {
             // AGGRESSIVE CLEANING: Keep only words that contain fiber keywords (remove decorative text like "B2NT19 OATMEAL")
             const fiberKeywords = ['PIMA', 'LYOCELL', 'VISCOSA', 'ALGODON', 'COTON', 'COTTON', 'ORG', 'ORGANICO', 'PES', 'POLY', 'POLIESTER',
                 'LANA', 'WOOL', 'NYLON', 'ELASTANO', 'SPANDEX', 'ACRILICO', 'LINO', 'HEMP', 'COP',
-                'REPREVE', 'PREPREVE', 'RECYCLED', 'RECICLADO', 'GOTS', 'TENCEL', 'MODAL', 'BAMBOO'];
+                'REPREVE', 'PREPREVE', 'RECYCLED', 'RECICLADO', 'GOTS', 'TENCEL', 'MODAL', 'BAMBOO', 'SEACELL', 'VI', 'PV'];
             const cleanParts = yarnForSignature.split(/\s+/).filter(word => {
                 const wordUpper = word.toUpperCase();
                 if (wordUpper === '/') return true; // keep separators so we preserve component splits
@@ -842,6 +843,7 @@ function recalcAll() {
         if (strictToken === 'ABETE_NANO_BLANCO') return 'ABETE NANO BLANCO (KG)';
         if (strictToken === 'ABETE_NANO_MULTI') return 'ABETE NANO 159 MULTICOLO (KG)';
         if (strictToken === 'HEMP' || strictToken === 'CAÑAMO') return 'CAÑAMO (KG)';
+        if (strictToken === 'LYOCELL_SEACELL') return 'LYOCELL SEACELL (KG)';
 
         return strictToken;
     }
@@ -884,6 +886,8 @@ function recalcAll() {
         if (u.includes('ABETE') && (u.includes('MULTI') || u.includes('MULTICOLOR') || u.includes('MULTICOLO'))) return 'ABETE NANO 159 MULTICOLO (KG)';
         if (u.includes('ABETE')) return 'ABETE NANO 159 MULTICOLO (KG)'; // Default to multicolor if not specified
         if (u.includes('CAÑAMO') || u.includes('CANAMO') || u.includes('HEMP')) return 'CAÑAMO (KG)';
+        if (u.includes('SEACELL')) return 'LYOCELL SEACELL (KG)';
+        if (u.includes('PV')) return 'VISCOSA (KG)';
 
         return yarn;
     }
@@ -1057,9 +1061,9 @@ function recalcAll() {
                                     'PIMA': ['PIMA'],
                                     'TANGUIS': ['TANGUIS'],
                                     'ALGODON': ['ALGODON', 'COTTON', 'COP'],
-                                    'LYOCELL': ['LYOCELL', 'TENCEL'],
+                                    'LYOCELL': ['LYOCELL', 'TENCEL', 'SEACELL'],
                                     'MODAL': ['MODAL'],
-                                    'VISCOSA': ['VISCOSA', 'VISCOSE', 'RAYON'],
+                                    'VISCOSA': ['VISCOSA', 'VISCOSE', 'RAYON', ' VI ', 'VI ', 'PV'],
                                     'NYLON': ['NYLON'],
                                     'PES': ['PES', 'REPREVE', 'RECYCLED'],
                                     'WOOL': ['WOOL', 'MERINO'],
@@ -1176,7 +1180,9 @@ function recalcAll() {
 
                         // Determinar fiberName basado en el nombre REAL del componente
                         let itemFiberName = fiberName; // Default
-                        if (realCompUpper.includes('LYOCELL') || realCompUpper.includes('TENCEL')) {
+                        if (realCompUpper.includes('SEACELL')) {
+                            itemFiberName = 'LYOCELL SEACELL (KG)';
+                        } else if (realCompUpper.includes('LYOCELL') || realCompUpper.includes('TENCEL')) {
                             if (realCompUpper.includes('A100')) {
                                 itemFiberName = 'LYOCELL A100 (KG)';
                             } else {
@@ -1196,6 +1202,8 @@ function recalcAll() {
                             itemFiberName = 'NYLON (KG)';
                         } else if (realCompUpper.includes('MODAL')) {
                             itemFiberName = 'MODAL (KG)';
+                        } else if (realCompUpper.includes('VISCOSA') || realCompUpper.includes('VISCOSE') || realCompUpper.includes(' VI ') || realCompUpper.startsWith('VI ') || realCompUpper.includes('PV')) {
+                            itemFiberName = 'VISCOSA (KG)';
                         } else if (isBananaPesBlend) {
                             itemFiberName = 'PES (KG)';
                         } else if (realCompUpper.includes('REPREVE') || realCompUpper.includes('PREPREVE') || (realCompUpper.includes('PES') && (realCompUpper.includes('RECYCLED') || realCompUpper.includes('RECICLADO')))) {
@@ -1247,9 +1255,9 @@ window.debugParseYarn = function (rawYarn) {
     let yarnStr = raw.trim();
     // 1) FIRST: Remove trailing HTR/NC/STD markers
     yarnStr = yarnStr.replace(/\s*(HTR|NC|STD)\s*$/i, '').trim();
-    // 2) Extract trailing percentages
+    // 2) Extract trailing percentages (supporting decimals)
     let pcts = [];
-    const pctMatch = yarnStr.match(/(?:\(|\[)?\s*(\d+(?:\/\d+)+)\s*%?\s*(?:\)|\])?\s*$/);
+    const pctMatch = yarnStr.match(/(?:\(|\[)?\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+)\s*%?\s*(?:\)|\])?\s*$/);
     if (pctMatch) {
         const rawPcts = pctMatch[1];
         pcts = rawPcts.split('/').map(s => { const n = parseFloat(s.replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : (n / 100); });
