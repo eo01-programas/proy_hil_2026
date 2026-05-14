@@ -22,7 +22,9 @@ const ORDERED_OTHER_KEYS = [
     "MODAL (KG)",
     "ABETE NANO 159 MULTICOLO (KG)",
     "ABETE NANO BLANCO (KG)",
-    "CAÑAMO (KG)"
+    "CAÑAMO (KG)",
+    "LYOCELL SEACELL (KG)",
+    "VISCOSA (KG)"
 ];
 
 // Lightweight polyfills for older browsers (kept ES5 for compatibility)
@@ -273,7 +275,7 @@ function getComponentPriority(compName) {
 function isOtherFiberToken(t) {
     if (!t) return false;
     const u = t.toString().toUpperCase();
-    return /LYOCELL|TENCEL|NYLON|REPREVE|PES|MODAL|ABETE|CAÑAMO|CANAMO|WOOL|MERINO|VISCOSA|VISCOSE|POLYESTER|LINO/.test(u);
+    return /LYOCELL|TENCEL|NYLON|REPREVE|PES|MODAL|ABETE|CAÑAMO|CANAMO|WOOL|MERINO|VISCOSA|VISCOSE|POLYESTER|LINO|SEACELL|PV|VI|CELL/.test(u);
 }
 
 function getPercentages(yarn) {
@@ -285,9 +287,9 @@ function getPercentages(yarn) {
     } catch (e) { /* ignore regex issues on exotic environments */ }
     s = s.replace(/\s+(HTR|NC|STD|HEATHER)\s*$/i, '');
     const patterns = [
-        /\(\s*(\d{1,3}(?:[\s\/]\s*\d{1,3})+)\s*%?\s*\)/,
-        /\[\s*(\d{1,3}(?:[\s\/]\s*\d{1,3})+)\s*%?\s*\]/,
-        /\s(\d{1,3}(?:[\s\/]\s*\d{1,3})+)%?\s*$/,
+        /\(\s*(\d+(?:\.\d+)?(?:[\s\/]\s*\d+(?:\.\d+)?)+)\s*%?\s*\)/,
+        /\[\s*(\d+(?:\.\d+)?(?:[\s\/]\s*\d+(?:\.\d+)?)+)\s*%?\s*\]/,
+        /\s(\d+(?:\.\d+)?(?:[\s\/]\s*\d+(?:\.\d+)?)+)%?\s*$/,
     ];
     for (let pattern of patterns) {
         const match = s.match(pattern);
@@ -309,7 +311,7 @@ function getPercentages(yarn) {
     }
     // Fallback: buscar cualquier secuencia de porcentajes tipo 50/30/20 o 50/30/20% incluso si está pegado a palabras
     try {
-        const m = s.match(/(\d{1,3}(?:\/\d{1,3})+)\%?/);
+        const m = s.match(/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)+)\%?/);
         if (m) {
             const parts = m[1].trim().split(/\//).map(p => p.replace(/%/g, '').trim()).filter(Boolean);
             if (parts.length >= 2) {
@@ -330,8 +332,8 @@ function cleanImportedName(yarnRaw, clientRaw) {
     let s = yarnRaw.toString().toUpperCase().trim();
     const client = (clientRaw || "").toString().toUpperCase().trim();
 
-    // Extraer porcentajes de participación (ej: 50/30/20%, 50/30/20, 50/30%, 50/30)
-    let percentageMatch = s.match(/(\d+[\s\/]\d+(?:[\s\/]\d+)?)\s*%?\s*$/);
+    // Extraer porcentajes de participación (ej: 50/30/20%, 50/30/20, 50/30%, 50/30) - Soporta decimales
+    let percentageMatch = s.match(/(\d+(?:\.\d+)?[\s\/]\d+(?:\.\d+)?(?:[\s\/]\d+(?:\.\d+)?)?)\s*%?\s*$/);
     let percentages = '';
     if (percentageMatch) {
         percentages = percentageMatch[1].replace(/\s+/g, '/');
@@ -340,7 +342,7 @@ function cleanImportedName(yarnRaw, clientRaw) {
             percentages += '%';
         }
         // Remover los porcentajes del string principal
-        s = s.replace(/(\d+[\s\/]\d+(?:[\s\/]\d+)?)\s*%?\s*$/, '').trim();
+        s = s.replace(/(\d+(?:\.\d+)?[\s\/]\d+(?:\.\d+)?(?:[\s\/]\d+(?:\.\d+)?)?)\s*%?\s*$/, '').trim();
     }
 
     // REGLA 1: Cambiar "PES PREPREVE" a "PES REPREVE"
@@ -390,7 +392,7 @@ function cleanImportedName(yarnRaw, clientRaw) {
 function getComponentNames(yarn) {
     if (!yarn) return [];
     let clean = yarn.toString().toUpperCase();
-    clean = clean.replace(/^\d+\/\d+\s+/, '').replace(/\s+\d{1,3}[\s\/]\d{1,3}%?\s*$/, '').replace(/\s+\d{1,3}%\s*$/, '').replace(/\b(STD|HTR|NC|HEATHER)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    clean = clean.replace(/^\d+\/\d+\s+/, '').replace(/\s+\d+(?:\.\d+)?[\s\/]\d+(?:\.\d+)?%?\s*$/, '').replace(/\s+\d+(?:\.\d+)?%\s*$/, '').replace(/\b(STD|HTR|NC|HEATHER)\b/gi, ' ').replace(/\s+/g, ' ').trim();
     const cottonKeywords = ['PIMA', 'TANGUIS', 'UPLAND', 'COP', 'ALGODON', 'COTTON', 'FLAME', 'ELEGANT', 'BCI', 'OCS', 'GOTS', 'USTCP', 'ORGANICO'];
     const otherFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
     const components = [];
@@ -446,8 +448,8 @@ function extractCottonName(yarn) {
 function hasMultipleFiberTypes(yarn) {
     if (!yarn) return false;
     const upper = yarn.toString().toUpperCase().replace(/^\d+\/\d+\s+/, '');
-    const hasPercentages = /\d{1,3}[\s\/]\d{1,3}%?/.test(upper) || /\d{1,3}%/.test(upper);
-    const nonCottonFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE'];
+    const hasPercentages = /\d+(?:\.\d+)?[\s\/]\d+(?:\.\d+)?%?/.test(upper) || /\d+(?:\.\d+)?%/.test(upper);
+    const nonCottonFibers = ['LYOCELL', 'TENCEL', 'MODAL', 'VISCOSA', 'VISCOSE', 'NYLON', 'PES', 'POLYESTER', 'REPREVE', 'PREPREVE', 'WOOL', 'MERINO', 'ACRYLIC', 'LINO', 'CAÑAMO', 'CANAMO', 'ELASTANO', 'SPANDEX', 'ABETE', 'SEACELL', 'PV', 'VI', 'CELL'];
     const cottonKeywords = ['PIMA', 'TANGUIS', 'UPLAND', 'COP', 'ALGODON', 'COTTON', 'FLAME', 'ELEGANT'];
     const hasCotton = cottonKeywords.some(kw => upper.includes(kw));
     const hasOtherFiber = nonCottonFibers.some(fiber => upper.includes(fiber));
