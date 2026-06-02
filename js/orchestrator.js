@@ -67,10 +67,10 @@ function getStrictCanonicalToken(raw) {
     if (u.includes('REPREVE') || u.includes('PES') || u.includes('RECICLADO')) return 'PES_REPREVE';
 
     // LYOCELL: Diferenciar A100 de STD/TENCEL
-    if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL_A100';
-    if (u.includes('LYOCELL') || u.includes('TENCEL')) return 'LYOCELL';
-    if (u.includes('MODAL')) return 'MODAL';
     if (u.includes('SEACELL')) return 'LYOCELL_SEACELL';
+    if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL_A100';
+    if (u.includes('LYOCELL') || u.includes('TENCEL') || u.includes('LYCEOLL')) return 'LYOCELL';
+    if (u.includes('MODAL')) return 'MODAL';
     if (u.includes('VISCOSA') || u.includes('VISCOSE') || u.includes(' VI ') || u.startsWith('VI ') || u.endsWith(' VI') || u.includes(' VI/') || u.includes('/VI ') || u.includes('PV')) return 'VISCOSA';
     if (u.includes('NYLON')) return 'NYLON';
     if (u.includes('WOOL') || u.includes('MERINO')) return 'WOOL';
@@ -869,8 +869,9 @@ function recalcAll() {
 
         // OTRAS FIBRAS (en orden de ORDERED_OTHER_KEYS)
         // Regenerated Cellulose - check for A100 qualifier first
+        if (u.includes('SEACELL')) return 'LYOCELL SEACELL (KG)';
         if (u.includes('LYOCELL') && u.includes('A100')) return 'LYOCELL A100 (KG)';
-        if (u.includes('LYOCELL') || u.includes('TENCEL')) return 'LYOCELL STD (KG)';
+        if (u.includes('LYOCELL') || u.includes('TENCEL') || u.includes('LYCEOLL')) return 'LYOCELL STD (KG)';
         if (u.includes('MODAL')) return 'MODAL (KG)';
         if (u.includes('VISCOSA') || u.includes('VISCOSE')) return 'VISCOSA (KG)';
         // Synthetics
@@ -886,7 +887,6 @@ function recalcAll() {
         if (u.includes('ABETE') && (u.includes('MULTI') || u.includes('MULTICOLOR') || u.includes('MULTICOLO'))) return 'ABETE NANO 159 MULTICOLO (KG)';
         if (u.includes('ABETE')) return 'ABETE NANO 159 MULTICOLO (KG)'; // Default to multicolor if not specified
         if (u.includes('CAÑAMO') || u.includes('CANAMO') || u.includes('HEMP')) return 'CAÑAMO (KG)';
-        if (u.includes('SEACELL')) return 'LYOCELL SEACELL (KG)';
         if (u.includes('PV')) return 'VISCOSA (KG)';
 
         return yarn;
