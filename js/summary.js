@@ -1056,6 +1056,18 @@ function openFiberModalByName(fiberDisplay, isAlgodon) {
 
 function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
     document.getElementById('fiberModalTitle').textContent = escapeHtml(fiberName);
+    
+    // Generar cabecera dinámica para la tabla de detalle
+    let theadHtml = `<tr><th class="border px-3 py-2 text-left">CLIENTE</th>`;
+    activeIndices.forEach(i => {
+        theadHtml += `<th class="border px-3 py-2 text-right">${MONTH_NAMES[i]}</th>`;
+    });
+    theadHtml += `<th class="border px-3 py-2 text-right font-bold">TOTAL</th></tr>`;
+    const fiberDetailHead = document.getElementById('fiberDetailHead');
+    if (fiberDetailHead) {
+        fiberDetailHead.innerHTML = theadHtml;
+    }
+
     let tbody = '';
     const clientKeys = Object.keys(clients).sort();
     let totals = new Array(12).fill(0);
@@ -1063,15 +1075,15 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
         const values = clients[client];
         // main numeric row (plain values, no click)
         let row = `<tr class="border-b hover:bg-gray-50"><td class="border px-3 py-2">${escapeHtml(client)}</td>`;
-        for (let i = 0; i < 12; i++) {
+        activeIndices.forEach(i => {
             const val = values[i] || 0; totals[i] += val;
             if (Math.abs(parseFloat(val || 0)) > 0.0001) {
                 row += `<td class="border px-3 py-2 text-right"><button type="button" class="fiber-cell-btn" onclick="onFiberCellClick(this)" data-fiber="${escapeHtml(fiberName)}" data-client="${escapeHtml(client)}" data-month="${i}" data-value="${val}" data-isalgodon="${isAlgodon ? 1 : 0}">${formatNumber(val)}</button></td>`;
             } else {
                 row += `<td class="border px-3 py-2 text-right text-slate-400">-</td>`;
             }
-        }
-        const sum = values.reduce((a, b) => a + b, 0);
+        });
+        const sum = activeIndices.reduce((a, i) => a + (values[i] || 0), 0);
         row += `<td class="border px-3 py-2 text-right font-bold">${formatNumber(sum)}</td></tr>`;
         tbody += row;
 
@@ -1082,11 +1094,11 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
         if (!suppressConsole) {
             clientKeys.forEach(client => {
                 const values = clients[client] || [];
-                for (let i = 0; i < 12; i++) {
+                activeIndices.forEach(i => {
                     const val = parseFloat(values[i] || 0) || 0;
-                    if (Math.abs(val) < 0.0001) continue;
+                    if (Math.abs(val) < 0.0001) return;
                     try { logFiberCellBreakdown(fiberName, client, i, val, !!isAlgodon); } catch (e) { /* ignore logging errors */ }
-                }
+                });
             });
         }
     } catch (e) { /* ignore overall */ }
@@ -1098,11 +1110,11 @@ function openFiberModal(fiberName, clients, isAlgodon, suppressConsole = true) {
 
     // Total row: use authoritative totals for display
     let totalRow = `<tr class="bg-gray-200 font-bold border-top"><td class="border px-3 py-2">TOTAL</td>`;
-    for (let i = 0; i < 12; i++) {
+    activeIndices.forEach(i => {
         const displayVal = authoritativeTotals ? (parseFloat(authoritativeTotals[i]) || 0) : (totals[i] || 0);
         totalRow += `<td class="border px-3 py-2 text-right">${formatNumber(displayVal)}</td>`;
-    }
-    const grandTotal = authoritativeTotals ? authoritativeTotals.reduce((a, b) => a + (parseFloat(b) || 0), 0) : totals.reduce((a, b) => a + b, 0);
+    });
+    const grandTotal = authoritativeTotals ? activeIndices.reduce((s, i) => s + (parseFloat(authoritativeTotals[i]) || 0), 0) : activeIndices.reduce((s, i) => s + totals[i], 0);
     totalRow += `<td class="border px-3 py-2 text-right">${formatNumber(grandTotal)}</td></tr>`;
     tbody += totalRow;
     document.getElementById('fiberDetailBody').innerHTML = tbody;
