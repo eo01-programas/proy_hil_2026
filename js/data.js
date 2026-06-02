@@ -750,6 +750,13 @@ function ingestData(jsonData, hiddenRows = new Set(), hiddenCols = new Set(), ro
         activeIndices = Array.from({ length: 12 }, (_, i) => i);
     }
 
+    // Reordenar activeIndices de forma cronológica según el orden de columnas en Excel
+    activeIndices.sort((a, b) => {
+        const colA = monthColumnIndexes[a] !== -1 ? monthColumnIndexes[a] : 9999;
+        const colB = monthColumnIndexes[b] !== -1 ? monthColumnIndexes[b] : 9999;
+        return colA - colB;
+    });
+
     // Mostrar todos los meses que tengan datos, sin filtrar por fecha actual
     // (el Excel puede contener meses pasados que deben ser visibles)
 }
